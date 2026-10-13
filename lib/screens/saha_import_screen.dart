@@ -36,7 +36,7 @@ class SahaImportScreen extends StatefulWidget {
 
   static const String menuTitle = 'นำเข้าข้อมูลสหกรณ์';
   static const IconData menuIcon = Icons.upload_file;
-  static const String groupTitle = 'ฌาปนกิจและสหกรณ์';
+  static const String groupTitle = 'สหกรณ์';
 
   /// ขนาดไฟล์สูงสุดที่ backend รับ
   static const int maxBytes = 5 * 1024 * 1024;

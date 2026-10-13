@@ -50,17 +50,13 @@ void main() {
 
   group('ก่อนเข้าสู่ระบบ', () {
     testWidgets(
-      'ชื่อระบบ ป้ายช่วงทดสอบ ข้อความแจ้งหลายบรรทัด และปุ่มเข้าสู่ระบบ — เรียกแค่เส้นสาธารณะ',
+      'จอแคบกว่า 900 จุด: วิธีเข้าสู่ระบบเป็นแถบบาง ๆ ใต้แถบบน ไม่อยู่ในแถบบน',
       (tester) async {
         await start(tester);
+        tester.view.physicalSize = const Size(880, 1000);
+        await tester.pumpAndSettle();
 
-        expect(AppConfig.systemName, 'ระบบหักหนี้');
-        expect(AppConfig.organizationName, 'กรมทางหลวง');
-        expect(find.text(TestPhaseBanner.message), findsOneWidget);
-        // แถบบน + ส่วนท้าย (ไม่มีส่วนหัวภาพขนาดใหญ่ในหน้าแรกแล้ว)
-        expect(find.text(AppConfig.systemName), findsNWidgets(2));
-        expect(find.byType(Image), findsNothing);
-        // แถบข้อความบาง ๆ แถวบนสุดของเนื้อหา แล้วตามด้วยกล่องข้อความแจ้งทันที
+        expect(find.byKey(CustomHeader.loginPromptKey), findsNothing);
         final strip = find.byKey(HomeScreen.loginStripKey);
         expect(
           find.descendant(
@@ -71,11 +67,62 @@ void main() {
         );
         expect(find.text(HomeScreen.loginPrompt), findsOneWidget);
         expect(tester.getSize(strip).height, lessThan(48));
-        expect(tester.getSize(strip).width, 1400);
-        final stripRect = tester.getRect(strip);
+        expect(
+          tester.getRect(find.byType(AlertMessageBox)).top,
+          greaterThanOrEqualTo(tester.getRect(strip).bottom),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('จอ 900 จุดพอดี: ข้อความอยู่ในแถบบนและไม่ล้น', (tester) async {
+      await start(tester);
+      tester.view.physicalSize = const Size(900, 1000);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(CustomHeader.loginPromptKey), findsOneWidget);
+      expect(find.byKey(HomeScreen.loginStripKey), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'ชื่อระบบ ป้ายช่วงทดสอบ ข้อความแจ้งหลายบรรทัด และปุ่มเข้าสู่ระบบ — เรียกแค่เส้นสาธารณะ',
+      (tester) async {
+        await start(tester);
+
+        expect(AppConfig.systemName, 'ระบบหักหนี้');
+        expect(AppConfig.organizationName, 'กรมทางหลวง');
+        expect(find.text(TestPhaseBanner.message), findsOneWidget);
+        // แถบบน + ส่วนท้าย (ไม่มีส่วนหัวภาพขนาดใหญ่ในหน้าแรกแล้ว)
+        expect(find.text(AppConfig.systemName), findsNWidgets(2));
+        expect(find.byType(Image), findsNothing);
+        // จอกว้าง: วิธีเข้าสู่ระบบอยู่แถวเดียวกับชื่อระบบในแถบบน ไม่มีแถบแยกใต้แถบบนแล้ว
+        final prompt = find.byKey(CustomHeader.loginPromptKey);
+        expect(
+          find.descendant(of: find.byType(CustomHeader), matching: prompt),
+          findsOneWidget,
+        );
+        expect(find.text(HomeScreen.loginPrompt), findsOneWidget);
+        expect(find.byKey(HomeScreen.loginStripKey), findsNothing);
+        final promptRect = tester.getRect(prompt);
+        final nameRect = tester.getRect(
+          find.descendant(
+            of: find.byType(CustomHeader),
+            matching: find.text(AppConfig.systemName),
+          ),
+        );
+        final loginRect = tester.getRect(
+          find.byKey(CustomHeader.loginButtonKey),
+        );
+        final barRect = tester.getRect(find.byType(CustomHeader));
+        expect(promptRect.top, greaterThanOrEqualTo(barRect.top));
+        expect(promptRect.bottom, lessThanOrEqualTo(barRect.bottom));
+        expect(promptRect.left, greaterThan(nameRect.right));
+        expect(promptRect.right, lessThan(loginRect.left));
+        expect(tester.takeException(), isNull);
         final boxRect = tester.getRect(find.byType(AlertMessageBox));
-        expect(boxRect.top, greaterThanOrEqualTo(stripRect.bottom));
-        expect(boxRect.top - stripRect.bottom, lessThan(40));
+        expect(boxRect.top, greaterThanOrEqualTo(barRect.bottom));
+        expect(boxRect.top - barRect.bottom, lessThan(40));
         // ไม่ต้องเลื่อนจอจึงเห็นข้อความแจ้ง
         expect(boxRect.top, lessThan(260));
         expect(find.textContaining('สงวนลิขสิทธิ์'), findsOneWidget);
@@ -141,14 +188,10 @@ void main() {
         expect(find.byKey(HomeScreen.loginStripKey), findsNothing);
         expect(find.text(HomeScreen.loginPrompt), findsNothing);
         expect(find.byKey(HomeScreen.periodCardKey), findsOneWidget);
-        // หลังเข้าสู่ระบบ: ข้อความแจ้งอยู่บนสุด เหนือการ์ดหน่วยงาน/งวด
-        expect(find.byType(AlertMessageBox), findsOneWidget);
-        expect(
-          tester.getRect(find.byType(AlertMessageBox)).bottom,
-          lessThanOrEqualTo(
-            tester.getTopLeft(find.byKey(HomeScreen.divCardKey)).dy,
-          ),
-        );
+        // หลังเข้าสู่ระบบ: ไม่แสดงข้อความแจ้งแล้ว การ์ดหน่วยงาน/งวดขึ้นมาอยู่บนสุด
+        expect(find.byType(AlertMessageBox), findsNothing);
+        expect(find.text(AlertMessageBox.title), findsNothing);
+        expect(find.byKey(HomeScreen.divCardKey), findsOneWidget);
         await tester.pump(const Duration(seconds: 5));
         await tester.pumpAndSettle();
       },
@@ -265,8 +308,8 @@ void main() {
           tester.widget<Text>(find.byKey(HomeScreen.canEditKey)).data,
           HomeScreen.canEditText,
         );
-        // ข้อความแจ้งยังอยู่หลังเข้าสู่ระบบ
-        expect(shownMessage(tester), backend.alertMessage);
+        // หลังเข้าสู่ระบบไม่แสดงข้อความแจ้ง
+        expect(find.byType(AlertMessageBox), findsNothing);
       },
     );
 
@@ -298,12 +341,8 @@ void main() {
         await start(tester, as: FakeBackend.account);
         // ฝ่ายบัญชี: มีการ์ดความคืบหน้าของงวด 12 ขั้น โหลดสถานะจากเส้นสรุป
         expect(find.byKey(PeriodProgress.cardKey), findsOneWidget);
-        // ลำดับบนจอ: ข้อความแจ้ง → การ์ดหน่วยงาน/งวด/ช่วงแก้ไข → ความคืบหน้าของงวด
-        final alertBottom = tester.getRect(find.byType(AlertMessageBox)).bottom;
-        final cardsTop = tester
-            .getTopLeft(find.byKey(HomeScreen.divCardKey))
-            .dy;
-        expect(alertBottom, lessThanOrEqualTo(cardsTop));
+        // ลำดับบนจอ: การ์ดหน่วยงาน/งวด/ช่วงแก้ไข → ความคืบหน้าของงวด (ไม่มีข้อความแจ้งหลังเข้าสู่ระบบ)
+        expect(find.byType(AlertMessageBox), findsNothing);
         expect(
           tester.getRect(find.byKey(HomeScreen.editWindowCardKey)).bottom,
           lessThanOrEqualTo(
@@ -335,6 +374,7 @@ void main() {
           HomeScreen.canEditText,
         );
         expect(find.text(HomeScreen.accountAlwaysText), findsOneWidget);
+        expect(find.text(HomeScreen.adminAlwaysText), findsNothing);
         expect(
           inCard(HomeScreen.divCardKey, find.text('902 กองบัญชีตัวอย่าง')),
           findsOneWidget,
@@ -346,6 +386,36 @@ void main() {
           ),
           findsOneWidget,
         );
+      },
+    );
+
+    testWidgets(
+      'ผู้ดูแลระบบที่มีสิทธิ์ทั้งหมด ช่วงแก้ไขปิด: บอกว่าเป็นสิทธิ์ของผู้ดูแลระบบ ไม่ใช่ฝ่ายบัญชี',
+      (tester) async {
+        // บัญชีผู้ดูแลของระบบจริงได้ทุกบทบาท (รวมฝ่ายบัญชี) จึงแก้ไขได้แม้ช่วงปิด
+        backend.users[FakeBackend.admin]!.roles = [
+          'USER',
+          'ACCOUNT',
+          'RESETPWD',
+          'ADMIN',
+        ];
+        backend.serverTime = DateTime(2025, 7, 4, 8, 0);
+        await start(tester, as: FakeBackend.admin);
+
+        expect(
+          inCard(
+            HomeScreen.editWindowCardKey,
+            find.text(HomeScreen.closedLabel),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<Text>(find.byKey(HomeScreen.canEditKey)).data,
+          HomeScreen.canEditText,
+        );
+        expect(find.text(HomeScreen.adminAlwaysText), findsOneWidget);
+        expect(find.text(HomeScreen.accountAlwaysText), findsNothing);
+        expect(find.byType(AlertMessageBox), findsNothing);
       },
     );
 

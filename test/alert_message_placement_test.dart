@@ -84,7 +84,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('หน้าแรก: กล่องข้อความหนึ่งกล่อง', () {
+  group('หน้าแรก: กล่องข้อความหนึ่งกล่อง เฉพาะก่อนเข้าสู่ระบบ', () {
     testWidgets('ก่อนเข้าสู่ระบบ', (tester) async {
       await startApp(tester);
       expect(find.byType(HomeScreen), findsOneWidget);
@@ -97,17 +97,12 @@ void main() {
       FakeBackend.account,
       FakeBackend.admin,
     ]) {
-      testWidgets('หลังเข้าสู่ระบบ (บัญชี $account)', (tester) async {
+      testWidgets('หลังเข้าสู่ระบบ (บัญชี $account): ไม่แสดงข้อความแจ้ง', (
+        tester,
+      ) async {
         await startApp(tester, as: account);
-        expectOneAlert();
-        // การ์ดความคืบหน้าของงวด (ฝ่ายบัญชี) ไม่มีข้อความแจ้งซ้ำ
-        expect(
-          find.descendant(
-            of: find.byType(PeriodProgress),
-            matching: find.textContaining(message),
-          ),
-          findsNothing,
-        );
+        expect(find.byType(HomeScreen), findsOneWidget);
+        expectNoAlert();
       });
     }
   });
@@ -151,7 +146,7 @@ void main() {
       tester,
     ) async {
       await startApp(tester, as: FakeBackend.user);
-      expectOneAlert();
+      expectNoAlert();
       for (final item in [
         (SidebarMenu.debtEntryTitle, DebtEntryScreen),
         (SidebarMenu.reportTitle, ReportScreen),
@@ -168,8 +163,9 @@ void main() {
         expectNoAlert();
         await tester.tap(find.byTooltip('ปิด'));
         await tester.pumpAndSettle();
-        // กลับหน้าแรก: ยังมีกล่องเดียว
-        expectOneAlert();
+        // กลับหน้าแรก: เข้าสู่ระบบอยู่จึงยังไม่มีข้อความแจ้ง
+        expect(find.byType(HomeScreen), findsOneWidget);
+        expectNoAlert();
       }
     });
 

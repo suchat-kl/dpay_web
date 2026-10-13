@@ -133,9 +133,10 @@ extension DebtApi on ApiService {
   /// รายการหนี้ของหน่วยงาน [div] ประเภท [type] — ไม่ส่ง [period] = งวดปัจจุบัน
   /// (ส่งงวดย้อนหลัง = ดูได้อย่างเดียว backend ตอบ `is_current_period` เท็จ)
   /// มี [name] หรือ [surname] = ค้นด้วย `POST /api/debts/search` (ชื่อไม่อยู่ใน URL)
+  /// ค้นทุกหน่วยงานทุกประเภท (เฉพาะผู้ที่เลือกได้ทุกหน่วยงาน): [div] = `*` ไม่ส่ง [type] และต้องมีชื่อหรือนามสกุล
   Future<DebtPage> getDebts({
     required String div,
-    required String type,
+    String? type,
     Period? period,
     String? name,
     String? surname,
@@ -150,7 +151,7 @@ extension DebtApi on ApiService {
         'GET',
         '/api/debts',
         query: {
-          'type': type,
+          'type': ?type,
           'div': div,
           ...?period?.toJson(),
           'page': page,
@@ -162,7 +163,7 @@ extension DebtApi on ApiService {
         'POST',
         '/api/debts/search',
         data: {
-          'type': type,
+          'type': ?type,
           'div': div,
           ...?period?.toJson(),
           if (n.isNotEmpty) 'name': n,

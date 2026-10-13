@@ -30,7 +30,7 @@ class ChapanaSlipScreen extends StatefulWidget {
 
   static const String menuTitle = 'รายงานฌาปนกิจ-สลิป';
   static const IconData menuIcon = Icons.compare_arrows;
-  static const String groupTitle = 'ฌาปนกิจและสหกรณ์';
+  static const String groupTitle = 'ฌาปนกิจ';
 
   static const Key runKey = ValueKey('slip-run');
   static const Key summaryKey = ValueKey('slip-summary');

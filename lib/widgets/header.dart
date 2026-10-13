@@ -13,9 +13,21 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
 
   const CustomHeader({super.key, required this.authProvider});
 
+  /// ข้อความบอกวิธีเข้าสู่ระบบ แสดงก่อนเข้าสู่ระบบ — จอกว้างอยู่แถวเดียวกับชื่อระบบในแถบบน
+  /// จอแคบ (ต่ำกว่า [loginPromptMinWidth]) แถบบนไม่พอ หน้าแรกแสดงเป็นแถบบาง ๆ ใต้แถบบนแทน
+  static const String loginPrompt =
+      'เข้าสู่ระบบด้วยรหัสหน่วยงานและรหัสผ่านของหน่วยงาน';
+  static const Key loginPromptKey = ValueKey('header-login-prompt');
+  static const double loginPromptMinWidth = 900;
+
+  /// จอกว้างพอให้ข้อความบอกวิธีเข้าสู่ระบบอยู่ในแถบบนหรือไม่
+  static bool promptFitsHeader(BuildContext context) =>
+      MediaQuery.of(context).size.width >= loginPromptMinWidth;
+
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.of(context).size.width < 600;
+    final showPrompt = !authProvider.isLoggedIn && promptFitsHeader(context);
 
     return AppBar(
       backgroundColor: AppTheme.primaryColor,
@@ -36,9 +48,11 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // ต้องเป็น Expanded และตัดท้ายด้วยจุดไข่ปลา
+          // ต้องเป็น Expanded/Flexible และตัดท้ายด้วยจุดไข่ปลา
           // ไม่งั้นชื่อระบบยาวกว่าแถบบนตอนเปิดด้วยจอแคบ แล้ว Row จะ overflow
-          Expanded(
+          Flexible(
+            flex: showPrompt ? 0 : 1,
+            fit: showPrompt ? FlexFit.loose : FlexFit.tight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -65,6 +79,26 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
               ],
             ),
           ),
+          // ก่อนเข้าสู่ระบบ (จอกว้าง): วิธีเข้าสู่ระบบอยู่แถวเดียวกับชื่อระบบ กึ่งกลางที่ว่างของแถบบน
+          if (showPrompt)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  loginPrompt,
+                  key: loginPromptKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'NotoSansThai',
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       actions: [

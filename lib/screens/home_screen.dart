@@ -9,13 +9,16 @@ import '../services/api_service.dart';
 import '../utils/permission.dart';
 import '../widgets/alert_message_box.dart';
 import '../widgets/footer.dart';
+import '../widgets/header.dart';
 import '../widgets/period_progress.dart';
 import '../widgets/screen_parts.dart';
 
 /// หน้าแรกของระบบ — ลำดับจากบนลงล่าง (ผู้ใช้สั่ง 13 ต.ค. 2569 ไม่มีส่วนหัวภาพขนาดใหญ่/ปุ่มเข้าสู่ระบบในเนื้อหาแล้ว):
 ///
-/// 1. ยังไม่เข้าสู่ระบบ: แถบบาง ๆ สีธีม "เข้าสู่ระบบด้วยรหัสหน่วยงานและรหัสผ่านของหน่วยงาน" (ปุ่มเข้าสู่ระบบอยู่ที่แถบบนของแอป)
-/// 2. **ข้อความแจ้งผู้ใช้งาน** (`GET /api/alert-message`) กล่องเดียว อยู่บนสุดของเนื้อหาเสมอ — แสดงที่หน้านี้หน้าเดียวของระบบ
+/// 1. ยังไม่เข้าสู่ระบบ: "เข้าสู่ระบบด้วยรหัสหน่วยงานและรหัสผ่านของหน่วยงาน" — จอกว้างอยู่แถวเดียวกับชื่อระบบในแถบบน
+///    (ผู้ใช้สั่ง 13 ต.ค. 2569) จอแคบเป็นแถบบาง ๆ สีธีมบนสุดของหน้านี้ (ปุ่มเข้าสู่ระบบอยู่ที่แถบบนของแอป)
+/// 2. **ข้อความแจ้งผู้ใช้งาน** (`GET /api/alert-message`) กล่องเดียวบนสุดของเนื้อหา — แสดงที่หน้านี้หน้าเดียวของระบบ
+///    และเฉพาะก่อนเข้าสู่ระบบ (ผู้ใช้สั่ง 13 ต.ค. 2569: หลังเข้าสู่ระบบไม่ต้องแสดง)
 /// 3. หลังเข้าสู่ระบบ: การ์ดหน่วยงานของผู้ใช้ งวดปัจจุบัน และสถานะระยะเวลาแก้ไขข้อมูล
 /// 4. ฝ่ายบัญชี (ACCOUNT): การ์ด "ความคืบหน้าของงวด" ([PeriodProgress])
 ///
@@ -26,9 +29,8 @@ class HomeScreen extends StatefulWidget {
 
   const HomeScreen({super.key, required this.authProvider});
 
-  /// ข้อความในแถบบนสุดของหน้าแรกเมื่อยังไม่เข้าสู่ระบบ
-  static const String loginPrompt =
-      'เข้าสู่ระบบด้วยรหัสหน่วยงานและรหัสผ่านของหน่วยงาน';
+  /// ข้อความบอกวิธีเข้าสู่ระบบเมื่อยังไม่เข้าสู่ระบบ (ตัวเดียวกับที่แถบบนแสดงตอนจอกว้าง)
+  static const String loginPrompt = CustomHeader.loginPrompt;
 
   static const Key loginStripKey = ValueKey('home-login-strip');
   static const Key divCardKey = ValueKey('home-div');
@@ -47,6 +49,8 @@ class HomeScreen extends StatefulWidget {
       'บัญชีนี้ยังแก้ไขข้อมูลไม่ได้ในขณะนี้ (ดูข้อมูลได้อย่างเดียว)';
   static const String accountAlwaysText =
       'ฝ่ายบัญชีแก้ไขข้อมูลได้ตลอด ไม่ขึ้นกับระยะเวลานี้';
+  static const String adminAlwaysText =
+      'ผู้ดูแลระบบมีสิทธิ์ทั้งหมด แก้ไขข้อมูลได้ตลอด ไม่ขึ้นกับระยะเวลานี้';
   static const String mustChangeText =
       'กรุณาเปลี่ยนรหัสผ่านก่อน จึงจะเห็นงวดปัจจุบันและระยะเวลาแก้ไขข้อมูล';
 
@@ -77,8 +81,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return SingleChildScrollView(
           child: Column(
             children: [
-              // ก่อนเข้าสู่ระบบ: แถบข้อความบาง ๆ แถวบนสุด (ไม่มีส่วนหัวภาพขนาดใหญ่แล้ว)
-              if (!_auth.isLoggedIn) _loginStrip(isDesktop),
+              // ก่อนเข้าสู่ระบบ จอแคบ: แถบข้อความบาง ๆ แถวบนสุด
+              // (จอกว้างข้อความนี้อยู่แถวเดียวกับชื่อระบบในแถบบนแล้ว — ดู CustomHeader)
+              if (!_auth.isLoggedIn && !CustomHeader.promptFitsHeader(context))
+                _loginStrip(isDesktop),
               Container(
                 width: double.infinity,
                 color: AppTheme.backgroundColor,
@@ -94,19 +100,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // ข้อความแจ้งผู้ใช้งานอยู่บนสุดของหน้าเสมอ (ทั้งก่อนและหลังเข้าสู่ระบบ) กล่องเดียว
-                        AlertMessageBox(
-                          message: _settings.alertMessage ?? '',
-                          loading:
-                              _settings.alertLoading &&
-                              _settings.alertMessage == null,
-                          error: _settings.alertMessage == null
-                              ? _settings.alertError
-                              : null,
-                          onRetry: _settings.loadAlertMessage,
-                        ),
-                        if (_auth.isLoggedIn)
-                          SizedBox(height: isDesktop ? 24 : 16),
+                        // ข้อความแจ้งผู้ใช้งาน: แสดงเฉพาะก่อนเข้าสู่ระบบ กล่องเดียวบนสุดของหน้า
+                        // (ผู้ใช้สั่ง 13 ต.ค. 2569: หลังเข้าสู่ระบบไม่ต้องแสดง)
+                        if (!_auth.isLoggedIn)
+                          AlertMessageBox(
+                            message: _settings.alertMessage ?? '',
+                            loading:
+                                _settings.alertLoading &&
+                                _settings.alertMessage == null,
+                            error: _settings.alertMessage == null
+                                ? _settings.alertError
+                                : null,
+                            onRetry: _settings.loadAlertMessage,
+                          ),
                         if (_auth.isLoggedIn) _buildStatusSection(),
                         // ฝ่ายบัญชี: ความคืบหน้าของงานประจำงวด พร้อมทางลัดไปแต่ละเมนู
                         if (_auth.isLoggedIn &&
@@ -352,12 +358,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          // ฝ่ายบัญชีแก้ได้แม้ช่วงปิด บอกเหตุไว้ไม่ให้สับสนกับป้าย "ปิด"
-          if (_auth.isAccount && !w.open)
+          // ผู้ดูแลระบบ/ฝ่ายบัญชีแก้ได้แม้ช่วงปิด บอกเหตุไว้ไม่ให้สับสนกับป้าย "ปิด"
+          // (ผู้ดูแลระบบมีสิทธิ์ทั้งหมด — บอกเป็นของผู้ดูแลก่อน แม้บัญชีนั้นมีบทบาทฝ่ายบัญชีด้วย)
+          if (!w.open && w.canEditNow && (_auth.isAdmin || _auth.isAccount))
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                HomeScreen.accountAlwaysText,
+                _auth.isAdmin
+                    ? HomeScreen.adminAlwaysText
+                    : HomeScreen.accountAlwaysText,
                 style: screenText(size: 13, color: AppTheme.textSecondary),
               ),
             ),

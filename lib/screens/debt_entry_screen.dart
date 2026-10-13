@@ -65,6 +65,15 @@ class DebtEntryScreen extends StatefulWidget {
   static const Key nameKey = ValueKey('debt-search-name');
   static const Key surnameKey = ValueKey('debt-search-surname');
   static const Key searchKey = ValueKey('debt-search');
+
+  /// บรรทัดประเภทบุคคล/หน่วยงานของแถว (มีเฉพาะผลค้นทุกหน่วยงาน)
+  static Key rowDivKey(String id) => ValueKey('debt-row-div-$id');
+  static const Key acrossNoticeKey = ValueKey('debt-search-across');
+
+  /// แถบแจ้งเมื่อผลค้นมาจากทุกหน่วยงาน (ผู้ดูแลระบบ/ฝ่ายบัญชี ค้นด้วยชื่อ-นามสกุล)
+  static const String acrossText =
+      'ผลค้นหาด้วยชื่อ-นามสกุลจากทุกหน่วยงาน ทั้งข้าราชการและลูกจ้างประจำ '
+      '(ไม่ขึ้นกับหน่วยงานและประเภทบุคคลที่เลือกไว้) ล้างช่องค้นหาแล้วกดค้นหาเพื่อกลับไปดูรายการของหน่วยงาน';
   static const Key periodKey = PeriodPicker.labelKey;
   static const Key periodButtonKey = PeriodPicker.buttonKey;
   static const Key pastNoticeKey = ValueKey('debt-past');
@@ -139,6 +148,16 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
 
   /// backend ตอบ EDIT_WINDOW_CLOSED ตอนบันทึก: ปิดการแก้ไขจนกว่าจะโหลดใหม่
   bool _forcedClosed = false;
+
+  /// รายการที่แสดงอยู่เป็นผลค้นทุกหน่วยงานทุกประเภท (ดู [_wantsAcross])
+  bool _across = false;
+
+  /// ผู้ที่เลือกได้ทุกหน่วยงาน (ผู้ดูแลระบบ/ฝ่ายบัญชี) ค้นด้วยชื่อ-นามสกุล = ใช้เงื่อนไขชื่อ-นามสกุลอย่างเดียว
+  /// ได้ทุกหน่วยงานทั้งข้าราชการและลูกจ้างประจำ — ผู้ใช้ทั่วไปค้นในหน่วยงานของตัวเองตามประเภทที่เลือกเหมือนเดิม
+  /// (ผู้ใช้สั่ง 13 ต.ค. 2569; backend กันสิทธิ์ซ้ำที่ `div: "*"`)
+  bool get _wantsAcross =>
+      widget.apiService.divScope == DivScope.all &&
+      (_name.text.trim().isNotEmpty || _surname.text.trim().isNotEmpty);
 
   List<DebtRow> get _rows => _data?.items ?? const [];
   bool get _dirty => _rows.any((r) => r.dirty);
@@ -232,10 +251,11 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
       _error = null;
       _blocked = null;
     });
+    final across = _wantsAcross;
     try {
       final page = await widget.apiService.getDebts(
-        div: div.div,
-        type: _type,
+        div: across ? '*' : div.div,
+        type: across ? null : _type,
         period: _past,
         name: _name.text,
         surname: _surname.text,
@@ -243,17 +263,21 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
         size: _pageSize,
       );
       // ยอดรวมโหลดไม่ได้ไม่ทำให้ตารางใช้ไม่ได้
+      // ผลค้นทุกหน่วยงานไม่แสดงยอดรวม (ยอดรวมเป็นของหน่วยงาน/ประเภทที่เลือก ไม่ใช่ของผลค้น)
       List<DebtSummaryItem> summary = const [];
-      try {
-        summary = await widget.apiService.getDebtSummary(
-          div: div.div,
-          type: _type,
-          period: _past,
-        );
-      } catch (_) {}
+      if (!across) {
+        try {
+          summary = await widget.apiService.getDebtSummary(
+            div: div.div,
+            type: _type,
+            period: _past,
+          );
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
         _data = page;
+        _across = across;
         _summary = summary;
         _version++;
         _forcedClosed = false;
@@ -449,6 +473,18 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(row.fullName, style: screenText(size: 14.5)),
+              // ผลค้นทุกหน่วยงาน: บอกประเภทบุคคลและหน่วยงานของแต่ละคน
+              if (_across)
+                Text(
+                  '${EmpType.nameOf(row.type)} · หน่วยงาน ${row.div} ${row.divName}'
+                      .trim(),
+                  key: DebtEntryScreen.rowDivKey(row.id),
+                  style: screenText(
+                    size: 12.5,
+                    weight: FontWeight.w600,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
               if (row.posName.isNotEmpty)
                 Text(
                   row.posName,
@@ -623,6 +659,15 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
           color: AppTheme.searchColor,
           onPressed: _search,
         ),
+        // ปุ่มบันทึกอยู่ต่อท้ายปุ่มค้นหา (ผู้ใช้สั่ง 13 ต.ค. 2569) — งวดย้อนหลังดูได้อย่างเดียว ไม่มีปุ่มบันทึก
+        if (_past == null)
+          PrimaryActionButton(
+            key: DebtEntryScreen.saveKey,
+            label: 'บันทึก',
+            icon: Icons.save_outlined,
+            loading: _saving,
+            onPressed: _editable && _dirty ? _save : null,
+          ),
       ],
     );
   }
@@ -730,9 +775,19 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
                             padding: EdgeInsets.all(40),
                             child: Center(child: CircularProgressIndicator()),
                           )
-                        else if (data != null && notice != null) ...[
-                          notice,
-                          const SizedBox(height: 12),
+                        else if (data != null) ...[
+                          if (_across) ...[
+                            const NoticeBar(
+                              key: DebtEntryScreen.acrossNoticeKey,
+                              type: NoticeType.info,
+                              text: DebtEntryScreen.acrossText,
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (notice != null) ...[
+                            notice,
+                            const SizedBox(height: 12),
+                          ],
                         ],
                       ],
                     ),
@@ -765,7 +820,7 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
                 ],
               ),
             ),
-            // แถบล่าง: สถานะแก้ไขค้าง + บันทึก + ตัวแบ่งหน้า
+            // แถบล่าง: ยอดรวม + สถานะแก้ไขค้าง + ตัวแบ่งหน้า
             Container(
               padding: EdgeInsets.symmetric(
                 horizontal: width < 520 ? 8 : 24,
@@ -779,32 +834,17 @@ class _DebtEntryScreenState extends State<DebtEntryScreen> {
                     _summaryStrip(),
                     const SizedBox(height: 8),
                   ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _dirty
-                            ? Text(
-                                DebtEntryScreen.dirtyText,
-                                key: DebtEntryScreen.dirtyKey,
-                                style: screenText(
-                                  size: 13.5,
-                                  weight: FontWeight.w600,
-                                  color: AppTheme.warningColor,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
+                  // ปุ่มบันทึกย้ายไปอยู่ต่อท้ายปุ่มค้นหาด้านบนแล้ว แถบล่างเหลือข้อความเตือนว่ามีการแก้ไขค้าง
+                  if (_dirty)
+                    Text(
+                      DebtEntryScreen.dirtyText,
+                      key: DebtEntryScreen.dirtyKey,
+                      style: screenText(
+                        size: 13.5,
+                        weight: FontWeight.w600,
+                        color: AppTheme.warningColor,
                       ),
-                      // งวดย้อนหลังดูได้อย่างเดียว ไม่มีปุ่มบันทึก
-                      if (_past == null)
-                        PrimaryActionButton(
-                          key: DebtEntryScreen.saveKey,
-                          label: 'บันทึก',
-                          icon: Icons.save_outlined,
-                          loading: _saving,
-                          onPressed: _editable && _dirty ? _save : null,
-                        ),
-                    ],
-                  ),
+                    ),
                   if (data != null) ...[
                     const SizedBox(height: 8),
                     AppPagination(

@@ -13,6 +13,7 @@ import 'package:dpay/services/api_service.dart';
 import 'package:dpay/services/debt_api.dart';
 import 'package:dpay/utils/money.dart';
 import 'package:dpay/utils/permission.dart';
+import 'package:dpay/utils/util.dart';
 import 'package:dpay/widgets/debt_dialogs.dart';
 import 'package:dpay/widgets/div_selector.dart';
 import 'package:dpay/widgets/screen_parts.dart';
@@ -335,6 +336,83 @@ void main() {
       expect(find.text('ทั้งหมด 5 คน'), findsOneWidget);
       expect(row(5), findsOneWidget);
       expect(row(1), findsNothing);
+    });
+
+    testWidgets(
+      'ฝ่ายบัญชี/ผู้ดูแล (เลือกได้ทุกหน่วยงาน) ค้นด้วยชื่อ-นามสกุล: ทุกหน่วยงาน ทั้งข้าราชการและลูกจ้างประจำ',
+      (tester) async {
+        await pump(tester, as: FakeBackend.account);
+        expect(find.byKey(DebtEntryScreen.acrossNoticeKey), findsNothing);
+        backend.clearLog();
+
+        await tester.enterText(
+          find.byKey(DebtEntryScreen.surnameKey),
+          'ตัวอย่าง',
+        );
+        await tester.tap(find.byKey(DebtEntryScreen.searchKey));
+        await tester.pumpAndSettle();
+
+        // ใช้เงื่อนไขชื่อ-นามสกุลอย่างเดียว: ไม่ส่งประเภทบุคคล หน่วยงานเป็น "*"
+        expect(backend.bodyOf('POST /api/debts/search'), {
+          'div': '*',
+          'surname': 'ตัวอย่าง',
+          'page': 0,
+          'size': 10,
+        });
+        expect(backend.queryOf('POST /api/debts/search'), isEmpty);
+        // ยอดรวมเป็นของหน่วยงาน/ประเภทที่เลือก ไม่ใช่ของผลค้น จึงไม่โหลด
+        expect(backend.calls, isNot(contains('GET /api/debts/summary')));
+        expect(find.byKey(DebtEntryScreen.acrossNoticeKey), findsOneWidget);
+
+        // ผลค้นมีมากกว่าหนึ่งหน่วยงานและมีทั้งสองประเภท แต่ละแถวบอกประเภทและหน่วยงาน
+        final hits = backend.p2.debts
+            .where((d) => '${d['surname']}'.contains('ตัวอย่าง'))
+            .toList();
+        expect(hits.map((d) => d['div']).toSet().length, greaterThan(1));
+        expect(hits.map((d) => d['type']).toSet(), {'G', 'E'});
+        expect(
+          find.text('ทั้งหมด ${Util.formatCount(hits.length)} คน'),
+          findsOneWidget,
+        );
+        final labels = tester
+            .widgetList<Text>(
+              find.byWidgetPredicate(
+                (w) => w.key.toString().contains('debt-row-div-'),
+              ),
+            )
+            .map((t) => t.data!)
+            .toList();
+        expect(labels, hasLength(10));
+        expect(labels.every((l) => l.contains('หน่วยงาน ')), isTrue);
+
+        // ล้างช่องค้นหาแล้วค้นใหม่: กลับเป็นรายการของหน่วยงานและประเภทที่เลือก
+        backend.clearLog();
+        await tester.enterText(find.byKey(DebtEntryScreen.surnameKey), '');
+        await tester.tap(find.byKey(DebtEntryScreen.searchKey));
+        await tester.pumpAndSettle();
+        expect(backend.calls, isNot(contains('POST /api/debts/search')));
+        expect(backend.queryOf('GET /api/debts')!['type'], 'G');
+        expect(backend.queryOf('GET /api/debts')!['div'], isNot('*'));
+        expect(find.byKey(DebtEntryScreen.acrossNoticeKey), findsNothing);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w.key.toString().contains('debt-row-div-'),
+          ),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('ปุ่มบันทึกอยู่แถวเดียวกับปุ่มค้นหา ต่อท้ายปุ่มค้นหา', (
+      tester,
+    ) async {
+      await pump(tester, as: FakeBackend.user);
+      final search = tester.getRect(find.byKey(DebtEntryScreen.searchKey));
+      final save = tester.getRect(find.byKey(DebtEntryScreen.saveKey));
+      expect(save.left, greaterThan(search.right));
+      expect((save.center.dy - search.center.dy).abs(), lessThan(8));
+      // ผู้ใช้ทั่วไปค้นตามเดิม: ไม่มีแถบผลค้นทุกหน่วยงาน
+      expect(find.byKey(DebtEntryScreen.acrossNoticeKey), findsNothing);
     });
 
     testWidgets('ไปหน้าถัดไป และเปลี่ยนจำนวนแถวต่อหน้า (ตัวเลือก 5/10/15/20)', (

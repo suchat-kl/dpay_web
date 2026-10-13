@@ -5,7 +5,7 @@ import 'package:dpay/screens/alert_message_screen.dart';
 import 'package:dpay/models/master_data.dart';
 import 'package:dpay/screens/cgd_files_screen.dart';
 import 'package:dpay/screens/chapana_import_screen.dart';
-import 'package:dpay/screens/coming_soon_screen.dart';
+import 'package:dpay/screens/chapana_slip_screen.dart';
 import 'package:dpay/screens/debt_entry_screen.dart';
 import 'package:dpay/screens/deduct_screen.dart';
 import 'package:dpay/screens/div_status_screen.dart';
@@ -37,7 +37,7 @@ import '../widgets/login_dialog.dart';
 ///
 /// กลุ่ม "สร้างไฟล์ส่งกรมบัญชีกลาง (ข้าราชการ/ลูกจ้างประจำ)" 14 รายการของระบบเดิม **ไม่มีแล้ว**: backend สร้างไฟล์ตอนดาวน์โหลด
 /// ไม่มีขั้น "สร้างไฟล์" แยก จึงรวมเป็นหน้าเดียว "ดาวน์โหลดไฟล์ข้อความส่งกรมบัญชีกลาง"
-/// เมนูที่ backend ยังไม่มี API (เหลือ "รายงานฌาปนกิจ-สลิป") เปิดหน้า "กำลังพัฒนา" (`ComingSoonScreen`)
+/// ทุกเมนูเปิดหน้าจอจริงแล้ว (ไม่มีหน้า "กำลังพัฒนา" เหลือ)
 ///
 /// เพิ่มเมนูใหม่ใน `_buildResponsiveDrawer` ด้วย `_buildExpandableMenuItem` + `_SubMenuItemData(..., screenCode: ...)`
 /// รายการย่อยซ่อนตามบทบาทให้เอง ไม่มีรายการที่ดูได้เลยทั้งกลุ่มก็ไม่แสดง
@@ -108,9 +108,6 @@ class SidebarMenu extends StatefulWidget {
   /// กลุ่มนำเข้าฌาปนกิจ/สหกรณ์ และกลุ่มตรวจ-ส่งออก (กลุ่มแบบขยายได้ ของฝ่ายบัญชี)
   static const String chapanaGroupTitle = ChapanaImportScreen.groupTitle;
   static const String exportGroupTitle = CgdFilesScreen.groupTitle;
-
-  /// เมนูเดียวที่ยังรอ API (เทียบฌาปนกิจกับสลิป — backend ก้อน ช)
-  static const String chapanaSlipTitle = 'รายงานฌาปนกิจ-สลิป';
 
   /// "สร้างไฟล์ข้อความทั้งหมดส่งธนาคาร" และ "ดาวน์โหลดไฟล์ข้อความส่งธนาคาร" ของระบบเดิมยกเลิก ไม่ทำ
   /// (คำสั่งผู้ใช้ 13 ต.ค. 2569) — ห้ามเพิ่มกลับ
@@ -336,12 +333,11 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     screenCode: Perm.prepare,
                   ),
                   _SubMenuItemData(
-                    Icons.article_outlined,
-                    SidebarMenu.chapanaSlipTitle,
-                    () => _openComingSoon(
+                    ChapanaSlipScreen.menuIcon,
+                    ChapanaSlipScreen.menuTitle,
+                    () => _openScreen(
                       context,
-                      SidebarMenu.chapanaSlipTitle,
-                      SidebarMenu.chapanaGroupTitle,
+                      (_) => ChapanaSlipScreen(apiService: ApiService()),
                     ),
                     screenCode: Perm.prepare,
                   ),
@@ -629,17 +625,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
     _closeMenu(context);
     _open(context, MaterialPageRoute(builder: builder));
   }
-
-  /// เปิดหน้า "กำลังพัฒนา" ของเมนูที่ยังรอ API
-  void _openComingSoon(
-    BuildContext context,
-    String title,
-    String group, [
-    IconData icon = Icons.construction,
-  ]) => _openScreen(
-    context,
-    (_) => ComingSoonScreen(title: title, group: group, icon: icon),
-  );
 
   /// หัวข้อของกลุ่มเมนู (ตัวเล็กสีเทา)
   Widget _sectionTitle(String title) => Padding(

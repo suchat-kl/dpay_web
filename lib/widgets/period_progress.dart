@@ -5,6 +5,7 @@ import '../models/debt.dart';
 import '../providers/settings_provider.dart';
 import '../screens/cgd_files_screen.dart';
 import '../screens/chapana_import_screen.dart';
+import '../screens/chapana_slip_screen.dart';
 import '../screens/debt_entry_screen.dart';
 import '../screens/div_status_screen.dart';
 import '../screens/edit_window_screen.dart';
@@ -37,7 +38,7 @@ enum StepState {
 /// ความคืบหน้าของงวด — หน้าแรกของฝ่ายบัญชี (ACCOUNT)
 ///
 /// งานประจำงวดเรียงตามลำดับที่ทำจริง: กำหนดงวด → ช่วงแก้ไข → นำเข้าบุคลากร → เตรียมงวด → หน่วยงานบันทึกหนี้
-/// → นำเข้าฌาปนกิจ → นำเข้าสหกรณ์ → ตรวจยอดเงินกู้ → ไฟล์ส่งกรมบัญชีกลาง → รายงานส่งธนาคาร → รายงาน
+/// → นำเข้าฌาปนกิจ → นำเข้าสหกรณ์ → ตรวจยอดเงินกู้ → ไฟล์ส่งกรมบัญชีกลาง → รายงานส่งธนาคาร → รายงานฌาปนกิจ-สลิป → รายงาน
 /// แต่ละขั้นแสดงสถานะจากเส้นสรุปที่มี และกดไปเมนูนั้นได้ ขั้นที่ไม่มีเส้นสรุป (หรือโหลดสถานะไม่ได้) เป็นทางลัดเฉย ๆ
 /// เส้นที่ใช้: `/api/period/dpis-import`, `/api/period/prepare`, `/api/debts/div-status`, `/api/chapana/summary`, `/api/saha/summary`,
 /// `/api/loans/check` — แต่ละเส้นล้มได้โดยไม่กระทบขั้นอื่น
@@ -282,6 +283,12 @@ class _PeriodProgressState extends State<PeriodProgress> {
         BankReportScreen.menuTitle,
         BankReportScreen.menuIcon,
         (_) => BankReportScreen(apiService: api),
+      ),
+      // เทียบกับสลิปเรียกข้ามระบบ (ระบบสลิปภาษี) จึงไม่เรียกอัตโนมัติ — เป็นทางลัดเฉย ๆ
+      _Step(
+        ChapanaSlipScreen.menuTitle,
+        ChapanaSlipScreen.menuIcon,
+        (_) => ChapanaSlipScreen(apiService: api),
       ),
       _Step(
         ReportScreen.menuTitle,

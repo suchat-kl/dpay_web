@@ -296,7 +296,7 @@ void main() {
       (tester) async {
         backend.serverTime = DateTime(2025, 7, 4, 8, 0);
         await start(tester, as: FakeBackend.account);
-        // ฝ่ายบัญชี: มีการ์ดความคืบหน้าของงวด 11 ขั้น โหลดสถานะจากเส้นสรุป
+        // ฝ่ายบัญชี: มีการ์ดความคืบหน้าของงวด 12 ขั้น โหลดสถานะจากเส้นสรุป
         expect(find.byKey(PeriodProgress.cardKey), findsOneWidget);
         // ลำดับบนจอ: ข้อความแจ้ง → การ์ดหน่วยงาน/งวด/ช่วงแก้ไข → ความคืบหน้าของงวด
         final alertBottom = tester.getRect(find.byType(AlertMessageBox)).bottom;
@@ -311,7 +311,7 @@ void main() {
           ),
         );
         expect(find.text(PeriodProgress.title), findsOneWidget);
-        expect(find.byKey(PeriodProgress.stepKey(11)), findsOneWidget);
+        expect(find.byKey(PeriodProgress.stepKey(12)), findsOneWidget);
         expect(
           backend.calls,
           containsAll([

@@ -195,6 +195,36 @@ extension WorkApi on ApiService {
     )['items'],
   );
 
+  // ============ ก้อน ช — เทียบฌาปนกิจกับสลิป ============
+
+  /// เทียบรายการหักฌาปนกิจของงวดกับยอดที่หักได้จริงในสลิป (คำนวณสด เรียกระบบสลิปภาษีและ DPIS — ใช้เวลาหลายวินาที)
+  /// `{summary:{chapana_rows, matched, mismatch, not_in_slip, not_paid, chapana_amount, not_paid_amount},
+  /// slip:{count, not_in_chapana}, items:[ผู้ที่หักไม่ได้]}` — 503 `SLIP_API_NOT_CONFIGURED`, 502 `SLIP_API_ERROR` / `DPIS_ERROR`
+  /// **คำตอบมีเลขบัตรและชื่อ ห้ามลง log / เก็บลง storage**
+  Future<Map<String, dynamic>> getChapanaSlipCheck({
+    required String type,
+    Period? period,
+  }) async => _map(
+    await request(
+      'GET',
+      '/api/chapana/slip-check',
+      query: {'type': type, ..._period(period)},
+      receiveTimeout: _longJob,
+    ),
+    'เทียบฌาปนกิจกับสลิปไม่สำเร็จ',
+  );
+
+  /// รายงาน PDF "รายชื่อบุคคลที่ไม่ถูกหักเงินฌาปนกิจประจำเดือน" — ไม่มีผู้ไม่ถูกหัก = 404
+  Future<DownloadedFile> downloadChapanaNotPay({
+    required String type,
+    Period? period,
+  }) => downloadFile(
+    '/api/reports/chapana-not-pay',
+    query: {'type': type, ..._period(period)},
+    fallbackName: 'rep9-$type.pdf',
+    failMessage: 'ออกรายงานไม่สำเร็จ',
+  );
+
   // ============ ก้อน จ — ไฟล์ส่งกรมบัญชีกลาง ============
 
   /// 14 ไฟล์ของงวด `items[]: {name, type, code, count, amount, size, unmappable_chars}`

@@ -95,7 +95,10 @@
   ประวัติการแก้ไขแสดงเฉพาะ "แก้ยอด" รายการเก่าชนิดอื่นแสดงเป็น "รายการเดิมของระบบ"
 - **ไฟล์ที่ดาวน์โหลดมีข้อมูลบุคคล**: รับเป็นไบต์ ส่งให้เบราว์เซอร์ผ่าน Blob (`lib/utils/file_download.dart`) อยู่ในหน่วยความจำของแท็บจนปิดหน้าจอ
   ไม่เก็บลง localStorage / IndexedDB และไม่ลง log
-- ยังเป็น "กำลังพัฒนา": **รายงานฌาปนกิจ-สลิป** (backend ก้อน ช ยังไม่ทำ)
+- **รายงานฌาปนกิจ-สลิป** (ACCOUNT): เทียบเงินฌาปนกิจที่**ต้องการหัก** (รายการของงวด) กับเงินที่**หักได้จริง**ในสลิป (จากระบบสลิปภาษี)
+  เลือกงวด (ย้อนหลังได้) + ประเภท แล้วกด "ตรวจสอบ" (ไม่เรียกอัตโนมัติเพราะเรียกข้ามระบบ) → การ์ดสรุป (ทั้งหมด / หักได้ตรงยอด / ยอดไม่ตรง / ไม่มีในสลิป / รวมที่หักไม่ได้)
+  + ตารางผู้ที่หักไม่ได้ (เลขสมาชิก ชื่อ สังกัด สถานะบุคคล ยอดที่ต้องการหัก ยอดในสลิป สาเหตุ จ่ายให้กับ) แบ่งหน้า เลขบัตรปิดบางส่วน + รายงาน PDF
+  ทุกคนหักได้ครบ = สถานะสำเร็จ; ยังไม่ได้นำเข้าฌาปนกิจของงวด = แจ้งพร้อมลิงก์ไปหน้านำเข้า; ข้อความเฉพาะของ `SLIP_API_NOT_CONFIGURED` (503), `SLIP_API_ERROR`, `DPIS_ERROR` (502)
 
 ## เมนูและบทบาท
 
@@ -114,14 +117,14 @@
 | งานหักหนี้ › รายงาน | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | เตรียมข้อมูล › ข้อมูลงวด › นำเข้าข้อมูลบุคลากร, เตรียมข้อมูลเดือนที่ผ่านมาเป็นงวดปัจจุบัน, สถานะการบันทึกของหน่วยงาน | | ✓ | | | | |
 | เตรียมข้อมูล › บันทึกรายการหลัก › รายชื่อธนาคาร, รายชื่อสาขาธนาคาร, รหัสหนี้, รายชื่อหน่วยงาน | | ✓ | | | | |
-| เตรียมข้อมูล › ฌาปนกิจและสหกรณ์ › นำเข้าข้อมูลฌาปนกิจ, นำเข้าข้อมูลสหกรณ์, รายงานฌาปนกิจ-สลิป *(กำลังพัฒนา)* | | ✓ | | | | |
+| เตรียมข้อมูล › ฌาปนกิจและสหกรณ์ › นำเข้าข้อมูลฌาปนกิจ, นำเข้าข้อมูลสหกรณ์, รายงานฌาปนกิจ-สลิป | | ✓ | | | | |
 | เตรียมข้อมูล › ไฟล์ส่งกรมบัญชีกลางและรายงานธนาคาร › ปรับปรุงหนี้ธนาคาร ดาวน์โหลดหนี้ที่ต้องแก้ไข, รายชื่อบุคคลที่ไม่มีเลขบัญชีธนาคาร, ดาวน์โหลดไฟล์ข้อความส่งกรมบัญชีกลาง, รายงานส่งธนาคาร | | ✓ | | | | |
 | เตรียมข้อมูล › บันทึกข้อมูลธนาคาร › กบข/กสจ. สหกรณ์และภาษี, เลขที่บัญชีเงินกู้ | | ✓ | | | | |
 
 - `CENTER_DEPT` / `ALL_DEPT` ไม่เพิ่มเมนู แต่กำหนดขอบเขตหน่วยงานที่เลือกได้ (`div_scope` = `OWN` / `CENTER` / `ALL`)
 - บัญชีที่ยังต้องเปลี่ยนรหัสผ่านเห็นแค่ หน้าแรก กับ เปลี่ยนรหัสผ่าน
 - เมนูของฝ่ายบัญชีเรียงตามลำดับงานประจำงวด (ข้อมูลงวด → ฌาปนกิจและสหกรณ์ → บันทึกข้อมูลธนาคาร → ไฟล์ส่งกรมบัญชีกลางและรายงานธนาคาร → บันทึกรายการหลัก)
-  เมนูเดียวที่ยังเปิดหน้า **"กำลังพัฒนา"** (`ComingSoonScreen`) คือ "รายงานฌาปนกิจ-สลิป"
+  ทุกเมนูเปิดหน้าจอจริงแล้ว ไม่มีหน้า "กำลังพัฒนา" เหลือ (`ComingSoonScreen` ลบออกแล้ว)
 - เมนู "สร้างไฟล์ข้อความทั้งหมดส่งธนาคาร" และ "ดาวน์โหลดไฟล์ข้อความส่งธนาคาร" ของระบบเดิม **ยกเลิกแล้ว** (ผู้ใช้สั่ง 13 ต.ค. 2569) ไม่มีในเมนู
 
 ## เริ่มใช้งาน
@@ -133,8 +136,8 @@ flutter run -d chrome --dart-define=API_BASE=https://suchat-dev.doh.go.th/dpayap
 
 ใน VS Code ใช้ Run and Debug > `dpay dev (WSL API)` (พอร์ตหน้าเว็บ 5585) หรือ `dpay dev (API localhost:9005)` (พอร์ต 5586)
 
-- `API_BASE` คือ URL ของ backend (ไม่มี `/` ปิดท้าย) **ไม่ส่งมา = `http://localhost:9005`** ซึ่งเป็นค่าของเครื่องนักพัฒนาเท่านั้น
-  build ขึ้นเครื่องจริงต้องส่งค่านี้เองทุกครั้ง
+- `API_BASE` คือ URL ของ backend (ไม่มี `/` ปิดท้าย) **ไม่ส่งมา = `https://backupdoh.doh.go.th/dpayapi`** (เครื่องจริง แบบเดียวกับ HTC และสลิปภาษี — ผู้ใช้กำหนด 13 ต.ค. 2569) ตอนพัฒนาต้องส่งค่านี้เองทุกครั้ง ไม่งั้นจะชี้ข้อมูลจริง
+  build ขึ้นเครื่องจริง: `flutter build web --no-wasm-dry-run` ไม่ต้องใส่ `API_BASE`
 - backend ฟัง **HTTPS** พอร์ต 9005 เป็นค่าเริ่มต้น (`DPAY_SSL_ENABLED=true`) จะใช้ `http://localhost:9005` ได้ต้องรัน backend แบบปิด SSL
   ปกติตอนพัฒนาให้เรียกผ่าน nginx (`https://suchat-dev.doh.go.th/dpayapi` ต้องมี `127.0.0.1 suchat-dev.doh.go.th` ใน hosts ของ Windows)
 - backend ต้องอนุญาต origin ของหน้าเว็บ (CORS — `CORS_EXTRA_ORIGINS` ใน env.conf) เช่น `http://localhost:5585`
@@ -160,7 +163,6 @@ flutter build web --no-wasm-dry-run --dart-define=API_BASE=<URL ของ API>  
 | ชื่อระบบ "ระบบหักหนี้" ชื่อหน่วยงาน "กรมทางหลวง" คำอธิบาย ไอคอน เลขเวอร์ชัน | `lib/config/app_config.dart` (`AppConfig`) — จุดเดียว ทุกหน้าจออ่านจากที่นี่ |
 | คำนำหน้าคีย์ของที่เก็บในเบราว์เซอร์ | `AppConfig.storagePrefix` = `dpay_` (`dpay_theme`, `dpay_menu_pinned`, คลัง token `dpay_secure_storage`) |
 | URL ของ API | `--dart-define=API_BASE=...` ตอน run/build และ `.vscode/launch.json` (ค่าตั้งต้นใน `ApiService.baseUrl`) |
-| เมนูที่ยังรอ API (หน้า "กำลังพัฒนา") | เหลือ `SidebarMenu.chapanaSlipTitle` ใน `lib/widgets/sidebar_menu.dart` |
 | ป้าย "ระบบงานอยู่ในช่วงทดสอบ" | `TestPhaseBanner` ใน `MaterialApp.builder` ของ `lib/main.dart` — **เปิดใช้จริงแล้วเอาออก** |
 | ชื่อบนแท็บเบราว์เซอร์ | `web/index.html` และ `web/manifest.json` |
 | ไอคอนเว็บ | `web/favicon.png`, `web/icons/*.png` — ตอนนี้เป็นไอคอนกลาง ๆ จากต้นแบบ ยังไม่ใช่ตราของระบบ |
@@ -234,6 +236,7 @@ code เพิ่ม: `DUPLICATE`, `IN_USE`, `CONFIRM_REQUIRED` (มี `details
 | เส้น | สิทธิ์ | ช่องที่หน้าเว็บส่ง / อ่าน |
 |---|---|---|
 | `GET /api/debts/div-status` | ACCOUNT | → `is_current_period, period_ready, prepared_at, audit_available, summary{divs, edited, not_edited, rows, rows_with_debt}, items[]: div, divname, div_order, center, g, e, rows, rows_with_debt, edited, edits, last_edit_at, last_edit_by` |
+| `GET /api/chapana/slip-check`, `GET /api/reports/chapana-not-pay` | ACCOUNT | `type` (+ `month, year`) → `summary{chapana_rows, matched, mismatch, not_in_slip, not_paid, chapana_amount, not_paid_amount}, slip{count, not_in_chapana}, items[]: idcard, name, member_no, dept_name, org_code, per_status, retired, amount, slip_amount, status, pay_for` / PDF (404 = ไม่มีผู้ไม่ถูกหัก) |
 | `POST /api/master/{resource}/delete` | ACCOUNT | `{ids[]}` → `results[]: id, deleted, code, message` |
 | `POST /api/persons/search` | ACCOUNT | `{name, surname}` → `items[]: idcard, type, title, name, surname, div, divname, pos_name`, `truncated` |
 | `PUT /api/loans/set` | ACCOUNT | `{id_card, items[]: ghb_acc, flg, emp_type, year, seq, subseq, amt}` |
@@ -312,7 +315,7 @@ ListenableBuilder(listenable: settings, builder: ...)   // วาดใหม่
 
 ก้อน ก–ฉ ทำแล้วทั้งหมด ที่เหลือ:
 
-1. **รายงานฌาปนกิจ-สลิป** (เทียบฌาปนกิจกับสลิป, chapanaNotPay) — รอ backend ก้อน ช
+1. ทุกก้อนของสัญญา backend (ก–ช) มีหน้าจอครบแล้ว
 2. ทดสอบทุกหน้าจอกับ backend จริง (รอบนี้ตรวจกับ backend จำลองในเทสต์เท่านั้น) โดยเฉพาะอัปโหลดไฟล์สหกรณ์และการดาวน์โหลดไฟล์บนเบราว์เซอร์จริง
 3. ก่อนเปิดใช้จริง: เอา `TestPhaseBanner` ออก เปลี่ยนไอคอนเว็บ
 

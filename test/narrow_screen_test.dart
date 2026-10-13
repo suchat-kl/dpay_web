@@ -12,6 +12,7 @@ import 'package:dpay/models/master_data.dart';
 import 'package:dpay/providers/settings_provider.dart';
 import 'package:dpay/screens/cgd_files_screen.dart';
 import 'package:dpay/screens/chapana_import_screen.dart';
+import 'package:dpay/screens/chapana_slip_screen.dart';
 import 'package:dpay/screens/debt_entry_screen.dart';
 import 'package:dpay/screens/div_status_screen.dart';
 import 'package:dpay/screens/loan_check_screen.dart';
@@ -699,6 +700,7 @@ void main() {
           BankReportScreen(apiService: api),
           ReportScreen(apiService: api),
           DivStatusScreen(apiService: api),
+          ChapanaSlipScreen(apiService: api),
         ];
         for (final screen in screens) {
           await open(tester, screen);
@@ -706,6 +708,17 @@ void main() {
           await scrollThrough(tester, find.byType(ListView).first);
           expectNoOverflow(tester);
         }
+
+        // ฌาปนกิจ-สลิป: กดตรวจสอบแล้วสรุปและตารางกว้าง (จ่ายให้กับหลายบรรทัด) ไม่ล้น เลื่อนแนวนอนได้
+        await open(tester, screens.last);
+        await reveal(tester, find.byKey(ChapanaSlipScreen.runKey));
+        await tester.tap(find.byKey(ChapanaSlipScreen.runKey));
+        await tester.pumpAndSettle();
+        expect(find.byKey(ChapanaSlipScreen.summaryKey), findsOneWidget);
+        expectNoOverflow(tester);
+        await scrollThrough(tester, find.byType(ListView).first);
+        expectNoOverflow(tester);
+        expect(find.byKey(ChapanaSlipScreen.tableKey), findsOneWidget);
 
         // สหกรณ์: ผลตรวจไฟล์และรายการที่มีปัญหา (ข้อความยาว) ไม่ล้น
         await open(tester, screens.first);
@@ -748,7 +761,7 @@ void main() {
       expectNoOverflow(tester);
       await scrollThrough(tester, find.byType(SingleChildScrollView).first);
       expectNoOverflow(tester);
-      expectWithinScreen(tester, find.byKey(PeriodProgress.stepKey(11)));
+      expectWithinScreen(tester, find.byKey(PeriodProgress.stepKey(12)));
     });
 
     testWidgets('กบข/กสจ. สหกรณ์และภาษี: ตัวค้นหา ผลค้นชื่อ และฟอร์มทั้งหน้า', (

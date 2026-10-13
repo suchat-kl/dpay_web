@@ -12,7 +12,7 @@ import 'package:dpay/providers/settings_provider.dart';
 import 'package:dpay/screens/alert_message_screen.dart';
 import 'package:dpay/screens/cgd_files_screen.dart';
 import 'package:dpay/screens/chapana_import_screen.dart';
-import 'package:dpay/screens/coming_soon_screen.dart';
+import 'package:dpay/screens/chapana_slip_screen.dart';
 import 'package:dpay/screens/debt_entry_screen.dart';
 import 'package:dpay/screens/deduct_screen.dart';
 import 'package:dpay/screens/div_status_screen.dart';
@@ -195,10 +195,7 @@ void main() {
           MasterScreen(apiService: api, resource: MasterResource.banks),
       'กำหนดรหัสผ่านใหม่ให้หน่วยงาน': () =>
           UserListScreen(apiService: api, mode: UserListMode.resetPassword),
-      'หน้ากำลังพัฒนา': () => const ComingSoonScreen(
-        title: 'รายงานฌาปนกิจ-สลิป',
-        group: 'ฌาปนกิจและสหกรณ์',
-      ),
+      'รายงานฌาปนกิจ-สลิป': () => ChapanaSlipScreen(apiService: api),
     };
 
     testWidgets(

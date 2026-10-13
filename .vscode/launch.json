@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  // พอร์ต 5585/5586 ไม่ชนกับ HTC (5555/5556) sliptax (5565/5566) และ template (5575) รันพร้อมกันได้
+  // --web-port คงที่ ทำให้ origin ไม่เปลี่ยนทุกครั้งที่รันใหม่
+  // flutter_secure_storage บนเว็บผูก token กับ origin จึงไม่ต้องล็อกอินใหม่
+  //
+  // ไม่ใช้ --user-data-dir เพราะ flutter คัดลอกโปรไฟล์ Chrome ทั้งก้อนไป-กลับ
+  // ทุกครั้งที่รัน โปรไฟล์โตหลักร้อย MB แล้วจะชนกับ antivirus จนรันไม่ขึ้น
+  //
+  // API_BASE = URL ของ backend (ไม่มี / ปิดท้าย) ห้ามใส่ URL ของเครื่องจริงลงไฟล์นี้
+  "configurations": [
+    {
+      "name": "dpay dev (WSL API)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--web-port=5585",
+        "--dart-define=API_BASE=https://suchat-dev.doh.go.th/dpayapi"
+      ]
+    },
+    {
+      "name": "dpay dev (API localhost:9005)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--web-port=5586",
+        "--dart-define=API_BASE=http://localhost:9005"
+      ]
+    }
+  ]
+}

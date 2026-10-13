@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <!--
+    base href = path ที่วางหน้าเว็บบนเครื่องจริง ต้องขึ้นต้นและปิดท้ายด้วย "/"
+    ค่า $FLUTTER_BASE_HREF ถูกแทนด้วยค่าของ `--base-href` ตอน `flutter build web`
+    (ไม่ส่ง = "/" คือวางที่ราก) เช่น flutter build web --base-href /myapp/
+    ให้รันจาก PowerShell เพราะ Git Bash แปลงค่าที่ขึ้นต้นด้วย "/" เป็น path ของ Windows
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="ระบบหักหนี้ กรมทางหลวง">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="ระบบหักหนี้ กรมทางหลวง">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>ระบบหักหนี้ กรมทางหลวง</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

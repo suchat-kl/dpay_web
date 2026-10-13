@@ -1,0 +1,54 @@
+name: dpay
+description: ระบบหักหนี้ กรมทางหลวง - หน้าเว็บ Flutter Web
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  dio: ^5.4.0
+  flutter_secure_storage: ^10.3.1
+  universal_html: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # ฟอนต์ไทย bundle มากับแอป ไม่โหลดจาก Google Fonts ตอน runtime (สัญญาอนุญาต OFL ดู assets/fonts/OFL.txt)
+  fonts:
+    - family: Sarabun
+      fonts:
+        - asset: assets/fonts/Sarabun-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Sarabun-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Sarabun-Bold.ttf
+          weight: 700
+
+    - family: NotoSansThai
+      fonts:
+        - asset: assets/fonts/NotoSansThai-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansThai-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansThai-Bold.ttf
+          weight: 700
+
+    - family: Kanit
+      fonts:
+        - asset: assets/fonts/Kanit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Kanit-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Kanit-Bold.ttf
+          weight: 700

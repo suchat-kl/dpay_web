@@ -164,6 +164,30 @@ class FakePhase3 {
   /// จริง = มีหน่วยงานที่ไม่มีในข้อมูลหลัก (div_order null) และแถวที่ไม่มีหน่วยงาน (div ว่าง) ต่อท้าย
   bool divStatusOddRows = false;
 
+  // ── เทียบฌาปนกิจกับสลิป ──
+  /// ข้อผิดพลาดของการเทียบ: null = ปกติ, 'SLIP_API_NOT_CONFIGURED' (503), 'SLIP_API_ERROR' / 'DPIS_ERROR' (502)
+  String? slipError;
+
+  /// ผู้ที่หักไม่ได้ของข้าราชการ (12 คน: 3 ยอดไม่ตรง 9 ไม่มีในสลิป) — ลูกจ้างประจำหักได้ครบ
+  late List<Map<String, dynamic>> slipNotPaid = [
+    for (var i = 1; i <= 12; i++)
+      {
+        'idcard': fakeIdCard(300 + i),
+        'name': 'นายสมมุติหัก${i.toString().padLeft(2, '0')} ตัวอย่าง',
+        'member_no': '8${i.toString().padLeft(4, '0')}',
+        'dept_name': 'หน่วยงานตัวอย่างที่ ${(i + 2) ~/ 3}',
+        'org_code': 'G00090${(i + 2) ~/ 3}',
+        'per_status': i == 12 ? ' ' : (i % 4 == 0 ? 2 : 1),
+        'retired': i != 12 && i % 4 == 0,
+        'amount': 120,
+        'slip_amount': i <= 3 ? 100 : 0,
+        'status': i <= 3 ? 'MISMATCH' : 'NOT_IN_SLIP',
+        'pay_for': i == 1
+            ? '80001 นายสมมุติหัก01 ตัวอย่าง\n80991 นางสมมุติคู่สมรส ตัวอย่าง'
+            : '8${i.toString().padLeft(4, '0')} นายสมมุติหัก${i.toString().padLeft(2, '0')} ตัวอย่าง',
+      },
+  ];
+
   // ── รายงาน ──
   /// รายงานที่ไม่มีข้อมูล (ชื่อรายงาน เช่น rep1 / bank-AIA) ตอบ 404
   final Set<String> reportMissing = {};
@@ -459,6 +483,65 @@ extension _FakePhase3Routes on FakeBackend {
           '/api/loans/missing-accounts-file',
         ].contains(path);
     if (!isPhase3) return null;
+
+    // ============ ก้อน ช: เทียบฌาปนกิจกับสลิป (ACCOUNT) ============
+    if (path == '/api/chapana/slip-check' ||
+        path == '/api/reports/chapana-not-pay') {
+      if (method != 'GET') {
+        return _error(405, 'METHOD_NOT_ALLOWED', 'ไม่รองรับวิธีเรียกนี้');
+      }
+      if (!has('ACCOUNT')) return _forbidden();
+      final type = '${q['type'] ?? ''}';
+      if (!const ['G', 'E'].contains(type)) {
+        return _bad('กรุณาระบุประเภทบุคลากร (G หรือ E)');
+      }
+      if (p3.slipError != null) {
+        return _error(
+          p3.slipError == 'SLIP_API_NOT_CONFIGURED' ? 503 : 502,
+          p3.slipError!,
+          'ข้อความจาก backend ของ ${p3.slipError}',
+        );
+      }
+      final imported = current && p3.chapanaRows > 0;
+      final g = p2.debts.where((d) => d['type'] == 'G').length;
+      final rows = !imported ? 0 : (type == 'G' ? g : p3.chapanaRows - g);
+      final items = imported && type == 'G'
+          ? p3.slipNotPaid
+          : <Map<String, dynamic>>[];
+      if (path == '/api/reports/chapana-not-pay') {
+        if (items.isEmpty) {
+          return _error(404, 'NOT_FOUND', FakePhase3.reportMissingMessage);
+        }
+        return _file(
+          const [37, 80, 68, 70, 45],
+          'rep9-$month$year-$type.pdf',
+          'application/pdf',
+        );
+      }
+      final mismatch = items.where((i) => i['status'] == 'MISMATCH').length;
+      return _json(200, {
+        ...period,
+        'type': type,
+        'summary': {
+          'chapana_rows': rows,
+          'matched': rows - items.length,
+          'mismatch': mismatch,
+          'not_in_slip': items.length - mismatch,
+          'not_paid': items.length,
+          'chapana_amount': rows * 120.0,
+          'not_paid_amount': items.fold<num>(
+            0,
+            (s, i) => s + (i['amount'] as num),
+          ),
+        },
+        'slip': {
+          'count': rows - items.length + mismatch + 2,
+          'not_in_chapana': 2,
+        },
+        'items': items,
+        'success': true,
+      });
+    }
 
     // ============ ก้อน ฉ: รายงาน (บางเส้นทุกบทบาท) ============
     final report = RegExp(

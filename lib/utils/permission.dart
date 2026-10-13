@@ -130,6 +130,8 @@ class ErrorCodes {
   static const String confirmRequired = 'CONFIRM_REQUIRED';
   static const String jobRunning = 'JOB_RUNNING';
   static const String loanAmountMismatch = 'LOAN_AMOUNT_MISMATCH';
+  static const String slipApiNotConfigured = 'SLIP_API_NOT_CONFIGURED';
+  static const String slipApiError = 'SLIP_API_ERROR';
   static const String periodNotReady = 'PERIOD_NOT_READY';
   static const String notCurrentPeriod = 'NOT_CURRENT_PERIOD';
   static const String dpisError = 'DPIS_ERROR';

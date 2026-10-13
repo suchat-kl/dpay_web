@@ -18,7 +18,7 @@ import 'package:dpay/screens/chapana_import_screen.dart';
 import 'package:dpay/screens/loan_check_screen.dart';
 import 'package:dpay/screens/report_screen.dart';
 import 'package:dpay/screens/saha_import_screen.dart';
-import 'package:dpay/screens/coming_soon_screen.dart';
+import 'package:dpay/screens/chapana_slip_screen.dart';
 import 'package:dpay/screens/div_status_screen.dart';
 import 'package:dpay/screens/debt_entry_screen.dart';
 import 'package:dpay/screens/deduct_screen.dart';
@@ -673,7 +673,7 @@ void main() {
       SidebarMenu.chapanaGroupTitle,
       ChapanaImportScreen.menuTitle,
       SahaImportScreen.menuTitle,
-      SidebarMenu.chapanaSlipTitle,
+      ChapanaSlipScreen.menuTitle,
       SidebarMenu.exportGroupTitle,
       LoanCheckScreen.syncMenuTitle,
       LoanCheckScreen.missingMenuTitle,
@@ -740,7 +740,7 @@ void main() {
     }
 
     testWidgets(
-      'เมนูของฝ่ายบัญชี: ทุกเมนูเปิดหน้าจอจริง เหลือ "รายงานฌาปนกิจ-สลิป" ที่ยังเป็นหน้า "กำลังพัฒนา" กลุ่มหุบ/ขยายได้',
+      'เมนูของฝ่ายบัญชี: ทุกเมนูเปิดหน้าจอจริง ไม่มีหน้า "กำลังพัฒนา" เหลือ กลุ่มหุบ/ขยายได้',
       (tester) async {
         await start(tester, height: 2600);
         await login(tester, FakeBackend.account);
@@ -779,19 +779,14 @@ void main() {
         expect(find.byType(LoanScreen), findsOneWidget);
         await close();
 
-        // เมนูเดียวที่ยังรอ API: หน้ากำลังพัฒนา ไม่เรียก backend
+        // รายงานฌาปนกิจ-สลิป: หน้าจอจริง ไม่มีหน้า "กำลังพัฒนา" แล้ว และไม่เรียกระบบสลิปเองตอนเปิด
         backend.clearLog();
         await openItem(
           SidebarMenu.chapanaGroupTitle,
-          SidebarMenu.chapanaSlipTitle,
+          ChapanaSlipScreen.menuTitle,
         );
-        final soon = tester.widget<ComingSoonScreen>(
-          find.byType(ComingSoonScreen),
-        );
-        expect(soon.title, SidebarMenu.chapanaSlipTitle);
-        expect(soon.group, SidebarMenu.chapanaGroupTitle);
-        expect(find.text(ComingSoonScreen.heading), findsOneWidget);
-        expect(find.text(ComingSoonScreen.message), findsOneWidget);
+        expect(find.byType(ChapanaSlipScreen), findsOneWidget);
+        expect(find.text('กำลังพัฒนา'), findsNothing);
         expect(backend.calls, isEmpty);
         await close();
 
@@ -836,7 +831,7 @@ void main() {
         await tester.tap(_inMenu(SidebarMenu.reportTitle));
         await tester.pumpAndSettle();
         expect(find.byType(ReportScreen), findsOneWidget);
-        expect(find.byType(ComingSoonScreen), findsNothing);
+        expect(find.text('กำลังพัฒนา'), findsNothing);
         await close();
 
         // บันทึกข้อมูล: หน้าจอจริง

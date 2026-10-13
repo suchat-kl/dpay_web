@@ -31,13 +31,14 @@ class ApiService {
   /// URL ของ API — เลือกตอน run/build ด้วย `--dart-define=API_BASE=...`
   ///
   ///   flutter run -d chrome --dart-define=API_BASE=https://suchat-dev.doh.go.th/dpayapi
-  ///   flutter build web --no-wasm-dry-run --dart-define=API_BASE=(URL ของ API บนเครื่องจริง)
+  ///   flutter build web --no-wasm-dry-run            (ไม่ต้องใส่ API_BASE = เครื่องจริง)
   ///
-  /// ค่าตั้งต้นเป็นเครื่องนักพัฒนา (พอร์ตตั้งต้นของ backend) เท่านั้น **build ขึ้นเครื่องจริงต้องส่งค่านี้เองทุกครั้ง**
+  /// ไม่ส่งมา = เครื่องจริง (backend อยู่ที่ backupdoh เครื่องเดียว หน้าเว็บวางที่ inf/infdoh/dbdoh/backupdoh แบบเดียวกับ HTC และสลิปภาษี)
+  /// **ตอนพัฒนาต้องส่ง API_BASE เองทุกครั้ง ไม่งั้นจะชี้ข้อมูลจริง**
   /// ไม่ต้องใส่ / ปิดท้าย เพราะ path ที่ต่อท้ายขึ้นต้นด้วย / อยู่แล้ว
   static const String baseUrl = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://localhost:9005',
+    defaultValue: 'https://backupdoh.doh.go.th/dpayapi',
   );
 
   // ── คีย์ในคลังเก็บ token (flutter_secure_storage) ──
@@ -760,8 +761,10 @@ class ApiService {
           receiveTimeout: receiveTimeout,
           // ไฟล์ต้องรับเป็นไบต์ตรง ๆ ห้ามแปลงเป็นข้อความ (ไฟล์ TIS-620 / PDF / xlsx / zip)
           responseType: bytes ? ResponseType.bytes : null,
-          // 502 DPIS_ERROR มีข้อความของ backend ให้ผู้เรียกแสดง จึงรับกลับมาเหมือน 4xx
-          validateStatus: (s) => s != null && s != 401 && (s < 500 || s == 502),
+          // 502 (DPIS_ERROR, SLIP_API_ERROR) และ 503 (SLIP_API_NOT_CONFIGURED) มี code/ข้อความของ backend
+          // ให้ผู้เรียกแสดง จึงรับกลับมาเหมือน 4xx
+          validateStatus: (s) =>
+              s != null && s != 401 && (s < 500 || s == 502 || s == 503),
         ),
       );
       // ขอเป็นไบต์แต่ backend ตอบข้อผิดพลาด (JSON): แปลงกลับเป็น Map ให้ผู้เรียกอ่าน code/message ได้ตามปกติ

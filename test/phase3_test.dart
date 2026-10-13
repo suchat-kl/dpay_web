@@ -1088,8 +1088,8 @@ void main() {
           'GET /api/loans/check',
         ]);
         expect(find.text(PeriodProgress.title), findsOneWidget);
-        expect(find.byKey(PeriodProgress.stepKey(11)), findsOneWidget);
-        expect(find.byKey(PeriodProgress.stepKey(12)), findsNothing);
+        expect(find.byKey(PeriodProgress.stepKey(12)), findsOneWidget);
+        expect(find.byKey(PeriodProgress.stepKey(13)), findsNothing);
 
         expect(status(tester, 1), PeriodProgress.doneLabel);
         expect(find.text('งวด กรกฎาคม 2568'), findsOneWidget);
@@ -1104,8 +1104,10 @@ void main() {
         expect(status(tester, 7), PeriodProgress.todoLabel);
         expect(status(tester, 8), PeriodProgress.problemLabel);
         expect(find.textContaining('ไม่ตรง 3 รายการ'), findsOneWidget);
-        // ไฟล์ส่งกรมบัญชีกลาง รายงานส่งธนาคาร รายงาน: ทางลัดเฉย ๆ
-        for (final n in [9, 10, 11]) {
+        // ไฟล์ส่งกรมบัญชีกลาง รายงานส่งธนาคาร รายงานฌาปนกิจ-สลิป รายงาน: ทางลัดเฉย ๆ
+        // (ฌาปนกิจ-สลิปเรียกข้ามระบบ จึงไม่เรียกอัตโนมัติจากหน้าแรก)
+        expect(backend.calls, isNot(contains('GET /api/chapana/slip-check')));
+        for (final n in [9, 10, 11, 12]) {
           expect(status(tester, n), isNull, reason: 'ขั้นที่ $n');
         }
 

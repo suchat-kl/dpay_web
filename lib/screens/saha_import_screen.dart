@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
@@ -25,6 +27,8 @@ import '../widgets/work_parts.dart';
 /// ด้านล่างเป็นรายการที่เลขบัตรยังเป็นเลขปลอม (`GET /api/saha/unresolved`) แก้การจับคู่รายคนได้
 /// (`PUT /api/saha/mapping` เลือกคนด้วย [PersonFinder]) — **นำเข้าเฉพาะงวดปัจจุบัน** (ผู้ใช้ตัดสิน)
 /// backend ตอบ 409 `NOT_CURRENT_PERIOD` เมื่องวดถูกเปลี่ยนระหว่างเปิดหน้าค้าง → บอกให้เปิดหน้าใหม่
+/// ไฟล์ที่เลขสมาชิกส่วนใหญ่เคยจับคู่เป็นอีกประเภท backend ตอบ 400 `SAHA_TYPE_MISMATCH` (ไม่บันทึก) → แสดงข้อความของ backend
+/// พร้อมบอกให้เลือกประเภทที่น่าจะถูก ปนมาส่วนน้อยเป็นปัญหาชนิด `OTHER_TYPE_MAPPING`
 /// **รายการที่มีปัญหามีชื่อบุคคล แสดงบนจอเท่านั้น ไม่ลง log**
 class SahaImportScreen extends StatefulWidget {
   final ApiService apiService;
@@ -47,6 +51,38 @@ class SahaImportScreen extends StatefulWidget {
   static const Key summaryKey = ValueKey('saha-summary');
   static const Key checkResultKey = ValueKey('saha-check-result');
   static const Key unresolvedKey = ValueKey('saha-unresolved');
+  static const Key jobKey = ValueKey('saha-job-running');
+
+  /// ถามสถานะงานที่ค้างอยู่ทุกกี่วินาทีระหว่างรอ
+  static const Duration jobPollInterval = Duration(seconds: 5);
+  static const String jobDoneText =
+      'การนำเข้าที่ค้างอยู่เสร็จแล้ว ตารางสรุปด้านล่างเป็นข้อมูลล่าสุด';
+
+  /// ข้อความเมื่อมีการนำเข้ากำลังทำอยู่ (ของหน้าต่างอื่น หรือของผู้ใช้เองที่ปิดหน้าเว็บไปก่อนงานเสร็จ)
+  static String jobRunningText(Map<String, dynamic> job) {
+    final d = job['detail'] is Map
+        ? Map<String, dynamic>.from(job['detail'] as Map)
+        : const <String, dynamic>{};
+    final what = d['type'] == null
+        ? 'ข้อมูลสหกรณ์'
+        : 'ข้อมูลสหกรณ์ของ${EmpType.nameOf('${d['type']}')}'
+              '${d['month'] == null ? '' : ' งวด ${d['month']}/${d['year']}'}';
+    final started = startedText(job['started_at']);
+    final owner = job['owner'] == null ? '' : ' โดยบัญชี ${job['owner']}';
+    return 'กำลังนำเข้า$what$owner${started == null ? '' : ' เริ่มเมื่อ $started'}\n'
+        'ระบบทำต่อจนเสร็จแม้ปิดหน้าเว็บไปแล้ว รอให้เสร็จก่อนจึงจะตรวจไฟล์/นำเข้าได้ หน้านี้จะอัปเดตเอง';
+  }
+
+  /// เวลาเริ่ม (ISO เวลาไทยจาก backend) เป็นวันเวลาไทย — อ่านตัวเลขตรง ๆ ไม่แปลงเขตเวลาตามเครื่องผู้ใช้
+  static String? startedText(Object? iso) {
+    final m = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})',
+    ).firstMatch('${iso ?? ''}');
+    if (m == null) return null;
+    int g(int i) => int.parse(m.group(i)!);
+    return Util.formatThaiDateTime(DateTime(g(1), g(2), g(3), g(4), g(5)));
+  }
+
   static Key typeKey(String type) => ValueKey('saha-type-$type');
   static Key problemKey(String kind) => ValueKey('saha-problem-$kind');
   static Key fixKey(String sahaId) => ValueKey('saha-fix-$sahaId');
@@ -69,7 +105,16 @@ class SahaImportScreen extends StatefulWidget {
       'เลขบัตรถูกผูกแล้ว',
       'ชื่อตรงกับคนที่ผูกกับเลขสมาชิกอื่นอยู่แล้ว ระบบไม่จดคู่ใหม่',
     ),
+    'OTHER_TYPE_MAPPING': (
+      'เคยจับคู่เป็นอีกประเภท',
+      'เลขสมาชิกนี้เคยจับคู่ไว้เป็นอีกประเภทบุคลากร ปนมาส่วนน้อยจึงยังนำเข้าได้ '
+          'ระบบใช้เลขบัตรจากคู่เดิม — ตรวจว่าไฟล์และประเภทที่เลือกถูกต้อง',
+    ),
   };
+
+  /// คำแนะนำต่อท้ายข้อความของ 400 `SAHA_TYPE_MISMATCH` (ไฟล์น่าจะเป็นของอีกประเภท)
+  static String typeMismatchHint(String likelyType) =>
+      'ถ้าไฟล์ถูกต้อง ให้เลือกประเภท "${EmpType.nameOf(likelyType)}" แล้วตรวจไฟล์ใหม่';
 
   static const String emptySummaryText = 'งวดนี้ยังไม่ได้นำเข้าข้อมูลสหกรณ์';
   static const String tooBigText = 'ไฟล์ใหญ่เกิน 5 MB นำเข้าไม่ได้';
@@ -98,12 +143,55 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
   bool _working = false;
   String? _error;
 
+  /// การนำเข้าที่กำลังทำอยู่ที่ server (ไม่ใช่ของหน้าต่างนี้) — null = ไม่มี ระหว่างนี้ถามสถานะซ้ำทุก [SahaImportScreen.jobPollInterval]
+  Map<String, dynamic>? _job;
+  Timer? _jobTimer;
+  bool _jobDone = false;
+
+  /// ปุ่มตรวจไฟล์/นำเข้า/แก้คู่ ใช้ไม่ได้ระหว่างที่หน้าต่างนี้ทำงาน หรือมีการนำเข้าค้างอยู่ที่ server
+  bool get _busy => _working || _job != null;
+
   String get _periodLabel => SettingsProvider().period?.label ?? '-';
 
   @override
   void initState() {
     super.initState();
     _load();
+    _checkJob();
+  }
+
+  @override
+  void dispose() {
+    _jobTimer?.cancel();
+    super.dispose();
+  }
+
+  /// ถามว่ามีการนำเข้าค้างอยู่ไหม มี = แสดงแถบและถามซ้ำจนเสร็จ เสร็จแล้วโหลดสรุปใหม่ (ถามไม่ได้ = ไม่แสดงอะไร)
+  Future<void> _checkJob() async {
+    Map<String, dynamic> status;
+    try {
+      status = await widget.apiService.getSahaImportStatus();
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    final running = status['running'] == true;
+    final wasRunning = _job != null;
+    setState(() {
+      _job = running ? status : null;
+      if (running) _jobDone = false;
+      if (wasRunning && !running) _jobDone = true;
+    });
+    if (running) {
+      _jobTimer ??= Timer.periodic(
+        SahaImportScreen.jobPollInterval,
+        (_) => _checkJob(),
+      );
+    } else {
+      _jobTimer?.cancel();
+      _jobTimer = null;
+      if (wasRunning) await _load();
+    }
   }
 
   static List<Map<String, dynamic>> _maps(Object? v) => [
@@ -160,10 +248,17 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
     });
   }
 
-  /// ข้อความของ 400 ไฟล์ผิดรูปแบบ (มี details บอกบรรทัดที่ผิด)
+  /// ข้อความของ 400 ไฟล์ผิดรูปแบบ (มี details บอกบรรทัดที่ผิด) และไฟล์ที่น่าจะเป็นของอีกประเภท
   String _describe(ApiException e) {
     if (e.code == ErrorCodes.notCurrentPeriod) return periodChangedMessage(e);
     final d = e.details;
+    if (e.code == ErrorCodes.sahaTypeMismatch) {
+      // ข้อความของ backend บอกจำนวนที่นับได้แล้ว เติมแค่สิ่งที่ผู้ใช้ทำต่อได้
+      final likely = d?['likely_type'];
+      return '${e.message}\n'
+          '${likely == null ? '' : '${SahaImportScreen.typeMismatchHint('$likely')}\n'}'
+          'ไฟล์นี้ยังไม่ถูกบันทึก';
+    }
     if (d == null || d['bad_line_count'] == null) return e.message;
     final lines = (d['bad_lines'] as List? ?? const []).join(', ');
     return '${e.message}\n'
@@ -266,7 +361,13 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
         }
         return;
       }
-      setState(() => _error = _describe(e));
+      setState(() {
+        _error = _describe(e);
+        // คู่เลขสมาชิกเปลี่ยนหลังตรวจไฟล์จนไฟล์กลายเป็นอีกประเภท: ผลตรวจเดิมใช้ไม่ได้ ต้องตรวจใหม่
+        if (e.code == ErrorCodes.sahaTypeMismatch) _check = null;
+      });
+      // มีการนำเข้าของคนอื่น (หรือของหน้าต่างที่ปิดไปแล้ว) ค้างอยู่: แสดงว่าใครทำ และรอจนเสร็จ
+      if (e.code == ErrorCodes.jobRunning) await _checkJob();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -377,7 +478,8 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                       child: Text(
                         'บรรทัด ${p['line'] ?? '-'} · สมาชิก ${p['saha_id'] ?? '-'} · '
                         '${p['name'] ?? ''} · ${moneyText(p['total_amount'])} บาท'
-                        '${kind.key == 'MULTIPLE_MATCH' ? ' · พบ ${countText(p['candidates'])} คน' : ''}',
+                        '${kind.key == 'MULTIPLE_MATCH' ? ' · พบ ${countText(p['candidates'])} คน' : ''}'
+                        '${kind.key == 'OTHER_TYPE_MAPPING' && p['mapped_type'] != null ? ' · เคยจับคู่เป็น${EmpType.nameOf('${p['mapped_type']}')}' : ''}',
                         style: screenText(size: 13.5),
                       ),
                     ),
@@ -475,7 +577,7 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                             key: SahaImportScreen.fixKey('${r['saha_id']}'),
                             icon: Icons.link,
                             color: AppTheme.editColor,
-                            onPressed: _working ? null : () => _fix(r),
+                            onPressed: _busy ? null : () => _fix(r),
                           ),
                         ),
                       ),
@@ -526,6 +628,22 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
           ],
         ),
         const SizedBox(height: 14),
+        if (_job != null) ...[
+          NoticeBar(
+            key: SahaImportScreen.jobKey,
+            type: NoticeType.warning,
+            title: 'มีการนำเข้ากำลังทำอยู่',
+            text: SahaImportScreen.jobRunningText(_job!),
+          ),
+          const SizedBox(height: 12),
+        ] else if (_jobDone) ...[
+          NoticeBar(
+            type: NoticeType.success,
+            text: SahaImportScreen.jobDoneText,
+            onClose: () => setState(() => _jobDone = false),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (_error != null) ...[
           NoticeBar(
             type: NoticeType.error,
@@ -590,7 +708,7 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                     f == null ? 'เลือกไฟล์' : 'เปลี่ยนไฟล์',
                     key: SahaImportScreen.pickKey,
                     icon: Icons.attach_file,
-                    onPressed: _working ? null : _pick,
+                    onPressed: _busy ? null : _pick,
                   ),
                   Text(
                     f == null
@@ -623,7 +741,7 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                   label: 'ตรวจไฟล์',
                   icon: Icons.rule,
                   loading: _working && check == null && imported == null,
-                  onPressed: f == null || _working ? null : _runCheck,
+                  onPressed: f == null || _busy ? null : _runCheck,
                 ),
               ),
               if (check != null) ...[
@@ -658,7 +776,7 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                   icon: Icons.cloud_upload_outlined,
                   loading: _working && check != null,
                   color: AppTheme.addColor,
-                  onPressed: check == null || _working ? null : _runImport,
+                  onPressed: check == null || _busy ? null : _runImport,
                 ),
               ),
               if (imported != null) ...[

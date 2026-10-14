@@ -130,6 +130,9 @@ class ErrorCodes {
   static const String confirmRequired = 'CONFIRM_REQUIRED';
   static const String jobRunning = 'JOB_RUNNING';
   static const String loanAmountMismatch = 'LOAN_AMOUNT_MISMATCH';
+
+  /// ไฟล์สหกรณ์น่าจะเป็นของอีกประเภทบุคลากร (400) — details บอกจำนวนที่นับได้ต่อประเภท
+  static const String sahaTypeMismatch = 'SAHA_TYPE_MISMATCH';
   static const String slipApiNotConfigured = 'SLIP_API_NOT_CONFIGURED';
   static const String slipApiError = 'SLIP_API_ERROR';
   static const String periodNotReady = 'PERIOD_NOT_READY';

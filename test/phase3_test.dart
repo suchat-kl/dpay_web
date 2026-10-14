@@ -27,6 +27,7 @@ import 'package:dpay/widgets/debt_dialogs.dart';
 import 'package:dpay/widgets/period_progress.dart';
 import 'package:dpay/widgets/person_finder.dart';
 import 'package:dpay/widgets/screen_parts.dart';
+import 'package:dpay/widgets/sheet_table.dart';
 import 'package:dpay/widgets/work_parts.dart';
 
 import 'fake_backend.dart';
@@ -798,10 +799,14 @@ void main() {
       'เลือกไฟล์ → ตรวจก่อน (dry_run) แสดงสรุปและปัญหาแยกชนิด → นำเข้า → นำเข้าซ้ำบอกจำนวนที่จะถูกแทน',
       (tester) async {
         await open(tester, () => file('saha.txt'));
-        expect(backend.calls, [
+        // เปิดหน้าแล้วถามด้วยว่ามีการนำเข้าค้างอยู่ไหม (ไม่มี = ไม่ถามซ้ำ)
+        expect(backend.calls.toSet(), {
           'GET /api/saha/summary',
           'GET /api/saha/unresolved',
-        ]);
+          'GET /api/saha/import-status',
+        });
+        expect(backend.calls, hasLength(3));
+        expect(find.byKey(SahaImportScreen.jobKey), findsNothing);
         expect(find.text(SahaImportScreen.emptySummaryText), findsOneWidget);
         expect(enabled(tester, SahaImportScreen.checkKey), isFalse);
         expect(enabled(tester, SahaImportScreen.importKey), isFalse);
@@ -833,7 +838,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: facts, matching: find.text('4 รายการ')),
+          find.descendant(of: facts, matching: find.text('5 รายการ')),
           findsOneWidget,
         );
         for (final kind in SahaImportScreen.problemKinds.entries) {
@@ -852,8 +857,17 @@ void main() {
           findsOneWidget,
         );
         expect(find.textContaining('พบ 2 คน'), findsOneWidget);
+        // ปนอีกประเภทส่วนน้อย: มีชื่อภาษาไทยของชนิดและบอกว่าเคยจับคู่เป็นประเภทใด
+        expect(
+          find.descendant(
+            of: find.byKey(SahaImportScreen.problemKey('OTHER_TYPE_MAPPING')),
+            matching: find.textContaining('เคยจับคู่เป็นลูกจ้างประจำ'),
+          ),
+          findsOneWidget,
+        );
         // เลขบัตรที่ระบบใช้ไปก่อนไม่แสดงเต็มบนจอ
         expect(find.textContaining(fakeIdCard(3)), findsNothing);
+        expect(find.textContaining(fakeIdCard(15)), findsNothing);
 
         await tapKey(tester, SahaImportScreen.importKey);
         expect(backend.bodyOf('POST /api/saha/import')!['dry_run'], 'false');
@@ -938,6 +952,133 @@ void main() {
         expect(enabled(tester, SahaImportScreen.importKey), isFalse);
         await tapKey(tester, SahaImportScreen.checkKey);
         expect(backend.bodyOf('POST /api/saha/import')!['type'], 'E');
+      },
+    );
+
+    testWidgets(
+      'ไฟล์น่าจะเป็นของอีกประเภท (400 SAHA_TYPE_MISMATCH): แสดงข้อความของ backend + ประเภทที่ควรเลือก ไม่มีผลตรวจ ไม่บันทึก',
+      (tester) async {
+        final queue = <PickedFile>[file('other_type.txt'), file('saha.txt')];
+        await open(tester, () => queue.removeAt(0));
+
+        // ตรวจไฟล์ (dry_run) ถูกปฏิเสธ
+        await tapKey(tester, SahaImportScreen.pickKey);
+        await tapKey(tester, SahaImportScreen.checkKey);
+        expect(
+          find.textContaining(FakePhase3.sahaTypeMismatchMessage('G')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(SahaImportScreen.typeMismatchHint('E')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('ไฟล์นี้ยังไม่ถูกบันทึก'), findsOneWidget);
+        expect(find.byKey(SahaImportScreen.checkResultKey), findsNothing);
+        expect(enabled(tester, SahaImportScreen.importKey), isFalse);
+        expect(backend.p3.sahaRows['G'], 0);
+
+        // ตรวจผ่าน แต่ตอนนำเข้าจริงคู่เลขสมาชิกเปลี่ยนจนไฟล์กลายเป็นอีกประเภท: ผลตรวจเดิมถูกล้าง ต้องตรวจใหม่
+        await tapKey(tester, SahaImportScreen.pickKey);
+        await tapKey(tester, SahaImportScreen.checkKey);
+        expect(find.byKey(SahaImportScreen.checkResultKey), findsOneWidget);
+        backend.p3.sahaMismatchOnImport = true;
+        await tapKey(tester, SahaImportScreen.importKey);
+        expect(backend.bodyOf('POST /api/saha/import')!['dry_run'], 'false');
+        expect(
+          find.textContaining(SahaImportScreen.typeMismatchHint('E')),
+          findsOneWidget,
+        );
+        expect(find.byKey(SahaImportScreen.checkResultKey), findsNothing);
+        expect(enabled(tester, SahaImportScreen.importKey), isFalse);
+        expect(backend.p3.sahaRows['G'], 0);
+      },
+    );
+
+    testWidgets(
+      'เปิดหน้าตอนที่มีการนำเข้าค้างอยู่ที่ server: บอกใครทำ งวดไหน เริ่มเมื่อไร ปิดปุ่ม แล้วอัปเดตเองเมื่อเสร็จ',
+      (tester) async {
+        backend.p3.sahaJob = {
+          'owner': '030',
+          'started_at': '2026-10-14T10:15:30.000+07:00',
+          'expires_at': '2026-10-14T10:45:30.000+07:00',
+          'detail': {'type': 'G', 'month': '10', 'year': '2569'},
+        };
+        await open(tester, () => file('saha.txt'));
+        expect(backend.calls, contains('GET /api/saha/import-status'));
+        final bar = find.byKey(SahaImportScreen.jobKey);
+        expect(bar, findsOneWidget);
+        final text = SahaImportScreen.jobRunningText(backend.p3.sahaJob!);
+        expect(text, contains('ข้าราชการ งวด 10/2569'));
+        expect(text, contains('บัญชี 030'));
+        expect(text, contains('14 ตุลาคม 2569'));
+        expect(text, contains('10:15'));
+        expect(find.textContaining('โดยบัญชี 030'), findsOneWidget);
+        // ระหว่างนั้นเลือกไฟล์/ตรวจ/นำเข้าไม่ได้
+        expect(
+          tester
+                  .widget<SheetButton>(find.byKey(SahaImportScreen.pickKey))
+                  .onPressed !=
+              null,
+          isFalse,
+        );
+        expect(enabled(tester, SahaImportScreen.checkKey), isFalse);
+        expect(enabled(tester, SahaImportScreen.importKey), isFalse);
+
+        // ยังไม่เสร็จ: ถามซ้ำแล้วยังแสดงอยู่
+        backend.clearLog();
+        await tester.pump(SahaImportScreen.jobPollInterval);
+        await tester.pumpAndSettle();
+        expect(backend.calls, contains('GET /api/saha/import-status'));
+        expect(bar, findsOneWidget);
+
+        // งานเสร็จ (ผู้สั่งอาจปิดหน้าเว็บไปแล้ว): รอบถัดไปแถบหาย โหลดสรุปใหม่ และใช้ปุ่มได้
+        backend.p3.sahaJob = null;
+        backend.clearLog();
+        await tester.pump(SahaImportScreen.jobPollInterval);
+        await tester.pumpAndSettle();
+        expect(bar, findsNothing);
+        expect(find.text(SahaImportScreen.jobDoneText), findsOneWidget);
+        expect(backend.calls, contains('GET /api/saha/summary'));
+        expect(
+          tester
+                  .widget<SheetButton>(find.byKey(SahaImportScreen.pickKey))
+                  .onPressed !=
+              null,
+          isTrue,
+        );
+        // หยุดถามแล้ว
+        backend.clearLog();
+        await tester.pump(SahaImportScreen.jobPollInterval * 2);
+        expect(backend.calls, isNot(contains('GET /api/saha/import-status')));
+      },
+    );
+
+    testWidgets(
+      'กดนำเข้าแล้วมีงานของหน้าต่างอื่นค้างอยู่ (JOB_RUNNING): แสดงสถานะงานนั้นและรอ ไม่มีอะไรถูกบันทึก',
+      (tester) async {
+        await open(tester, () => file('saha.txt'));
+        expect(find.byKey(SahaImportScreen.jobKey), findsNothing);
+        await tapKey(tester, SahaImportScreen.pickKey);
+        await tapKey(tester, SahaImportScreen.checkKey);
+        backend.p3.sahaJob = {
+          'owner': '999',
+          'started_at': '2026-10-14T09:00:00.000+07:00',
+          'detail': {'type': 'E', 'month': '10', 'year': '2569'},
+        };
+        await tapKey(tester, SahaImportScreen.importKey);
+        expect(find.textContaining('งานนี้กำลังทำอยู่'), findsOneWidget);
+        expect(find.byKey(SahaImportScreen.jobKey), findsOneWidget);
+        expect(
+          find.textContaining('ลูกจ้างประจำ งวด 10/2569 โดยบัญชี 999'),
+          findsOneWidget,
+        );
+        expect(enabled(tester, SahaImportScreen.importKey), isFalse);
+        expect(backend.p3.sahaRows['G'], 0);
+
+        backend.p3.sahaJob = null;
+        await tester.pump(SahaImportScreen.jobPollInterval);
+        await tester.pumpAndSettle();
+        expect(find.byKey(SahaImportScreen.jobKey), findsNothing);
       },
     );
 

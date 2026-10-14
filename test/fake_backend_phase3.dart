@@ -47,6 +47,15 @@ class FakePhase3 {
       'candidates': 1,
       'total_amount': 450,
     },
+    {
+      'kind': 'OTHER_TYPE_MAPPING',
+      'line': 15,
+      'saha_id': '000115',
+      'name': 'นายสมมุติข้าม ตัวอย่าง',
+      'idcard_used': fakeIdCard(15),
+      'total_amount': 650,
+      'mapped_type': 'E',
+    },
   ];
 
   /// รายการที่เลขบัตรยังเป็นเลขปลอม
@@ -60,6 +69,12 @@ class FakePhase3 {
         'total_amount': 100 * i,
       },
   ];
+
+  /// จำลองคู่เลขสมาชิกเปลี่ยนหลังตรวจไฟล์: ตรวจ (dry_run) ผ่าน แต่นำเข้าจริงตอบ SAHA_TYPE_MISMATCH
+  bool sahaMismatchOnImport = false;
+
+  /// การนำเข้าที่ค้างอยู่ที่ server (ของหน้าต่างอื่น) — null = ไม่มี; มีอยู่ = นำเข้าจริงตอบ 409 JOB_RUNNING
+  Map<String, dynamic>? sahaJob;
 
   /// เลขบัตรที่ผูกกับเลขสมาชิกอื่นอยู่แล้ว (PUT mapping ตอบ DUPLICATE)
   final Set<String> sahaMapped = {fakeIdCard(30)};
@@ -199,6 +214,11 @@ class FakePhase3 {
   static const String sahaExistsMessage =
       'งวดนี้มีข้อมูลสหกรณ์ของประเภทนี้แล้ว';
   static const String sahaBadFileMessage = 'ไฟล์ผิดรูปแบบ';
+
+  /// ข้อความของ 400 SAHA_TYPE_MISMATCH (ไฟล์ที่ชื่อมีคำว่า other ถือเป็นไฟล์ของอีกประเภท)
+  static String sahaTypeMismatchMessage(String type) =>
+      'ไฟล์นี้น่าจะเป็นของ${type == 'G' ? 'ลูกจ้างประจำ' : 'ข้าราชการ'} ไม่ใช่ประเภทที่เลือก: '
+      'เคยจับคู่ไว้เป็นอีกประเภท 8 ราย ตรงประเภทเพียง 1 ราย จึงไม่ได้นำเข้า';
 }
 
 extension _FakePhase3Routes on FakeBackend {
@@ -617,6 +637,20 @@ extension _FakePhase3Routes on FakeBackend {
     if (!has('ACCOUNT')) return _forbidden();
 
     // ============ ก้อน ง: สหกรณ์ ============
+    if (path == '/api/saha/import-status' && method == 'GET') {
+      return _json(200, {
+        ...(p3.sahaJob == null
+            ? {'running': false}
+            : {'running': true, ...p3.sahaJob!}),
+        'success': true,
+      });
+    }
+    if (path == '/api/saha/import' &&
+        method == 'POST' &&
+        p3.sahaJob != null &&
+        body?['dry_run'] != 'true') {
+      return conflict('JOB_RUNNING', 'งานนี้กำลังทำอยู่ กรุณารอให้เสร็จก่อน');
+    }
     if (path == '/api/saha/import' && method == 'POST') {
       if (p2.notCurrentPeriod) {
         return conflict(
@@ -639,6 +673,22 @@ extension _FakePhase3Routes on FakeBackend {
             'bad_line_count': 2,
             'bad_lines': [4, 9],
             'expected_length': 104,
+          },
+          'success': false,
+        });
+      }
+      // จริง = เลขสมาชิกที่เคยจับคู่ไว้ส่วนใหญ่เป็นอีกประเภท ตรวจก่อน CONFIRM_REQUIRED ทั้ง dry_run และนำเข้าจริง
+      if (fileName.contains('other') ||
+          (p3.sahaMismatchOnImport && body?['dry_run'] != 'true')) {
+        return _json(400, {
+          'code': 'SAHA_TYPE_MISMATCH',
+          'message': FakePhase3.sahaTypeMismatchMessage(type),
+          'details': {
+            'type': type,
+            'likely_type': type == 'G' ? 'E' : 'G',
+            'members_in_file': 10,
+            'mapped_same_type': 1,
+            'mapped_other_type': 8,
           },
           'success': false,
         });

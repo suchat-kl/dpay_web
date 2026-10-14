@@ -118,6 +118,13 @@ extension WorkApi on ApiService {
     'นำเข้าข้อมูลสหกรณ์ไม่สำเร็จ',
   );
 
+  /// การนำเข้าสหกรณ์ที่กำลังทำอยู่ของใครก็ได้ `{running, owner, started_at, expires_at, detail: {type, month, year}}`
+  /// (งานที่ server ทำต่อจนเสร็จแม้ผู้สั่งปิดหน้าเว็บ) ไม่มีงาน = `running` เป็นเท็จ
+  Future<Map<String, dynamic>> getSahaImportStatus() async => _map(
+    await request('GET', '/api/saha/import-status'),
+    'โหลดสถานะการนำเข้าสหกรณ์ไม่สำเร็จ',
+  );
+
   /// สรุปข้อมูลสหกรณ์ของงวด `items[]: {type, rows, total_amount, fake_idcard_rows}`
   Future<List<Map<String, dynamic>>> getSahaSummary({Period? period}) async =>
       _list(

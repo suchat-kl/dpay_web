@@ -74,6 +74,7 @@ class DpisImportScreen extends StatefulWidget {
   static const String groupTitle = 'ข้อมูลงวด';
   static const Key runKey = ValueKey('dpis-run');
   static const Key totalKey = ValueKey('dpis-total');
+  static const Key missingKey = ValueKey('dpis-missing');
   static const String jobRunningText =
       'มีการนำเข้าข้อมูลบุคลากรค้างอยู่ กรุณารอให้เสร็จก่อนแล้วกดโหลดสถานะใหม่';
   static const String dpisErrorText =
@@ -227,6 +228,13 @@ class _DpisImportScreenState extends State<DpisImportScreen> {
                 _fact(
                   'ข้ามเพราะเลขบัตรซ้ำ',
                   '${_count(r['skipped_duplicate_idcard'])} คน',
+                ),
+                // DPIS นับได้แต่ไม่ส่งรายชื่อมา (ข้อมูลใน DPIS ไม่ครบ เช่น ไม่มีตำแหน่ง/ระดับ)
+                _fact(
+                  'DPIS ไม่ส่งรายชื่อมา (ข้อมูลใน DPIS ไม่ครบ)',
+                  'ข้าราชการ ${_count(r['dpis_missing_g'])} คน '
+                      'ลูกจ้างประจำ ${_count(r['dpis_missing_e'])} คน',
+                  key: DpisImportScreen.missingKey,
                 ),
               ],
             ),

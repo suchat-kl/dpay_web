@@ -241,6 +241,9 @@ class FakeBackend implements HttpClientAdapter {
   /// ไม่เป็น null = GET /api/alert-message ตอบรหัสสถานะนี้แทน
   int? alertStatus;
 
+  /// path ที่จำลองให้ตอบ 500 (เช่นเส้นสรุปล้ม) — ตรวจก่อนเส้นอื่นทั้งหมด
+  final Set<String> failPaths = {};
+
   /// จริง = ผล login ไม่มีช่อง must_change_password (หน้าเว็บต้องรู้จาก 403 PASSWORD_CHANGE_REQUIRED เอง)
   bool hideMustChangeInLogin = false;
 
@@ -401,7 +404,8 @@ class FakeBackend implements HttpClientAdapter {
   ResponseBody _forbidden([String message = forbiddenMessage]) =>
       _error(403, 'FORBIDDEN', message);
 
-  String _scope(FakeUser u) => u.roles.contains('ALL_DEPT')
+  String _scope(FakeUser u) =>
+      u.roles.contains('ALL_DEPT') || u.roles.contains('ADMIN')
       ? 'ALL'
       : u.roles.contains('CENTER_DEPT')
       ? 'CENTER'
@@ -427,7 +431,9 @@ class FakeBackend implements HttpClientAdapter {
     };
   }
 
-  bool _canEditNow(FakeUser u) => u.roles.contains('ACCOUNT') || windowOpen;
+  // ฝ่ายบัญชีและผู้ดูแลระบบแก้ได้ตลอด ผู้ใช้ทั่วไปเฉพาะในระยะเวลาแก้ไข (แบบ AccessGuard.canEditNow)
+  bool _canEditNow(FakeUser u) =>
+      u.roles.contains('ACCOUNT') || u.roles.contains('ADMIN') || windowOpen;
 
   Map<String, dynamic> _profile(FakeUser u) => {
     'username': u.username,
@@ -544,6 +550,10 @@ class FakeBackend implements HttpClientAdapter {
       );
     }
 
+    if (failPaths.contains(path)) {
+      return _error(500, 'INTERNAL_ERROR', 'จำลองเส้นนี้ล้ม');
+    }
+
     // ── เส้นสาธารณะ 3 เส้น ──
     if (path == '/api/auth/login' && method == 'POST') {
       final u = users[body?['username']];
@@ -600,7 +610,9 @@ class FakeBackend implements HttpClientAdapter {
       return _error(401, 'UNAUTHENTICATED', unauthenticatedMessage);
     }
     final me = users[username]!;
-    bool has(String role) => me.roles.contains(role);
+    // ผู้ดูแลระบบถือว่ามีทุกบทบาท (แบบ User.hasRole ของ backend)
+    bool has(String role) =>
+        me.roles.contains(role) || me.roles.contains('ADMIN');
 
     // ── /api/auth/** ใช้ได้แม้ต้องเปลี่ยนรหัสผ่าน ──
     if (path == '/api/auth/logout' && method == 'POST') {

@@ -97,7 +97,9 @@ class Perm {
   /// ผู้ถือบทบาทชุด [roles] เปิดหน้าจอ [screenCode] ได้ไหม รหัสที่ไม่รู้จัก = ไม่ได้
   static bool allows(String screenCode, Iterable<String> roles) {
     final allowed = _allowedRoles[screenCode];
-    return allowed != null && roles.any(allowed.contains);
+    if (allowed == null) return false;
+    // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู
+    return roles.contains(Roles.admin) || roles.any(allowed.contains);
   }
 
   /// ผู้ที่เข้าสู่ระบบอยู่เปิดหน้าจอนี้ได้ไหม (ยังไม่เข้าสู่ระบบ = ไม่ได้)

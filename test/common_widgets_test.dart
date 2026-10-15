@@ -456,7 +456,8 @@ void main() {
     test('Perm.allows: ตารางบทบาทต่อหน้าจอ', () {
       for (final code in [Perm.period, Perm.alertMessage, Perm.editWindow]) {
         expect(Perm.allows(code, [Roles.account]), isTrue, reason: code);
-        expect(Perm.allows(code, [Roles.admin]), isFalse, reason: code);
+        // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู (ผู้ใช้สั่ง 15 ต.ค. 2569)
+        expect(Perm.allows(code, [Roles.admin]), isTrue, reason: code);
         expect(Perm.allows(code, [Roles.user]), isFalse, reason: code);
       }
       expect(Perm.allows(Perm.userResetPassword, [Roles.resetPwd]), isTrue);
@@ -529,7 +530,10 @@ void main() {
         expect(Perm.isAdmin, isTrue);
         expect(Perm.view(Perm.userManage), isTrue);
         expect(Perm.view(Perm.userResetPassword), isTrue);
-        expect(Perm.view(Perm.period), isFalse);
+        // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู ถือว่ามีทุกบทบาท
+        expect(Perm.view(Perm.period), isTrue);
+        expect(Perm.view(Perm.prepare), isTrue);
+        expect(Perm.isAccount, isTrue);
       },
     );
   });

@@ -254,9 +254,29 @@ void main() {
       'หน่วยงานทั่วไป ช่วงแก้ไขเปิด: หน่วยงาน งวดเป็นเดือนไทย ปี พ.ศ. ช่วงเป็นวันที่ไทย + เวลา และแก้ไขได้',
       (tester) async {
         await start(tester, as: FakeBackend.user);
-        // ความคืบหน้าของงวดเป็นของฝ่ายบัญชีเท่านั้น: บทบาทอื่นไม่เห็นและไม่เรียกเส้นสรุป
-        expect(find.byType(PeriodProgress), findsNothing);
-        expect(backend.calls, isNot(contains('GET /api/period/prepare')));
+        // ความคืบหน้าของงวด: ผู้ใช้ทั่วไปเห็นเฉพาะขั้น 5 หน่วยงานบันทึกหนี้ กับขั้น 12 รายงาน (เลขเดียวกับฝ่ายบัญชี)
+        // และไม่เรียกเส้นสรุปของฝ่ายบัญชี
+        expect(find.byKey(PeriodProgress.cardKey), findsOneWidget);
+        for (var n = 1; n <= 12; n++) {
+          expect(
+            find.byKey(PeriodProgress.stepKey(n)),
+            n == 5 || n == 12 ? findsOneWidget : findsNothing,
+            reason: 'ขั้น $n',
+          );
+        }
+        expect(find.text(PeriodProgress.entryEditableText), findsOneWidget);
+        expect(find.text(PeriodProgress.generalSubtitle), findsOneWidget);
+        expect(find.byKey(PeriodProgress.refreshKey), findsNothing);
+        for (final path in [
+          'GET /api/period/dpis-import',
+          'GET /api/period/prepare',
+          'GET /api/debts/div-status',
+          'GET /api/chapana/summary',
+          'GET /api/saha/summary',
+          'GET /api/loans/check',
+        ]) {
+          expect(backend.calls, isNot(contains(path)), reason: path);
+        }
 
         expect(
           backend.calls,
@@ -332,6 +352,11 @@ void main() {
         HomeScreen.cannotEditText,
       );
       expect(find.text(HomeScreen.accountAlwaysText), findsNothing);
+      // นอกช่วงเวลา: ขั้นหน่วยงานบันทึกหนี้กับรายงานยังอยู่ บอกว่าดูข้อมูลได้อย่างเดียว
+      expect(find.byKey(PeriodProgress.stepKey(5)), findsOneWidget);
+      expect(find.byKey(PeriodProgress.stepKey(12)), findsOneWidget);
+      expect(find.text(PeriodProgress.entryReadOnlyText), findsOneWidget);
+      expect(find.text(PeriodProgress.entryEditableText), findsNothing);
     });
 
     testWidgets(

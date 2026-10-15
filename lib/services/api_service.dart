@@ -134,7 +134,9 @@ class ApiService {
   DivScope get divScope => _divScope;
   bool get isLoggedIn => _isLoggedIn;
 
-  bool hasRole(String role) => _roles.contains(role);
+  /// ถือบทบาทนี้ไหม — ผู้ดูแลระบบถือว่ามีทุกบทบาท (สิทธิ์ทุกเมนู แบบ User.hasRole ของ backend)
+  bool hasRole(String role) =>
+      _roles.contains(role) || _roles.contains(Roles.admin);
 
   /// ต้องเปลี่ยนรหัสผ่านก่อนใช้งานส่วนอื่น (backend ตอบ `must_change_password` หรือ 403 PASSWORD_CHANGE_REQUIRED)
   /// หน้าเว็บจะเปิดหน้าเปลี่ยนรหัสผ่านแบบปิดไม่ได้จนกว่าจะเปลี่ยน

@@ -50,6 +50,19 @@ class SahaImportScreen extends StatefulWidget {
   static const Key importKey = ValueKey('saha-import');
   static const Key summaryKey = ValueKey('saha-summary');
   static const Key checkResultKey = ValueKey('saha-check-result');
+  static const Key importedProblemsKey = ValueKey('saha-imported-problems');
+  static const String importedProblemsTitle =
+      'รายการที่มีปัญหาของการนำเข้าครั้งนี้';
+
+  /// บรรทัดบอกว่าบันทึกเป็นกี่รายการ — หนึ่งรายการต่อหนึ่งเลขบัตร คนที่มีหลายเลขสมาชิกรวมยอดเป็นรายการเดียว
+  /// (backend รุ่นที่ยังไม่มีช่อง stored_rows = ไม่แสดง)
+  static String storedText(Map<String, dynamic> r) {
+    if (r['stored_rows'] == null) return '';
+    final merged = intOf(r['merged_people']);
+    return 'บันทึก ${countText(r['stored_rows'])} รายการ (หนึ่งรายการต่อเลขบัตร'
+        '${merged > 0 ? ' — รวมยอดคนที่มีหลายเลขสมาชิก ${countText(merged)} คน' : ''})\n';
+  }
+
   static const Key unresolvedKey = ValueKey('saha-unresolved');
   static const Key jobKey = ValueKey('saha-job-running');
 
@@ -846,10 +859,22 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                   text:
                       '${EmpType.nameOf('${imported['type']}')} ${countText(imported['rows'])} แถว '
                       'ยอดรวม ${moneyText(imported['total_amount'])} บาท\n'
+                      '${SahaImportScreen.storedText(imported)}'
                       'แทนที่ข้อมูลเดิม ${countText(imported['replaced_rows'])} รายการ · '
                       'จดคู่ใหม่ ${countText(imported['new_mappings'])} คน · '
                       'มีปัญหา ${countText(imported['problem_count'])} รายการ',
                 ),
+                // รายละเอียดปัญหาของการนำเข้าครั้งนี้ (เดิมเห็นเฉพาะตอนตรวจไฟล์)
+                if (intOf(imported['problem_count']) > 0) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    SahaImportScreen.importedProblemsTitle,
+                    key: SahaImportScreen.importedProblemsKey,
+                    style: screenText(size: 15, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  _problems(imported),
+                ],
               ],
             ],
           ),

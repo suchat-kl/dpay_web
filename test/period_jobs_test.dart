@@ -102,6 +102,11 @@ void main() {
       expect(find.text('38 คน'), findsNWidgets(2)); // ผลครั้งนี้ + สถานะล่าสุด
       expect(find.text('36 คน'), findsOneWidget); // จำนวนเดิมก่อนนำเข้า
       expect(find.text('ข้ามเพราะเลขบัตรไม่ถูกต้อง'), findsOneWidget);
+      // DPIS นับได้แต่ไม่ส่งรายชื่อมา
+      expect(
+        tester.widget<Text>(find.byKey(DpisImportScreen.missingKey)).data,
+        'ข้าราชการ 1 คน ลูกจ้างประจำ 0 คน',
+      );
       expect(find.text('25 มิถุนายน 2568 เวลา 09:30:00 น.'), findsOneWidget);
       expect(
         find.textContaining('นำเข้าข้อมูลบุคลากรจาก DPIS สำเร็จ'),

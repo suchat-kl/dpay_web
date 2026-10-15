@@ -111,9 +111,16 @@ void main() {
         ),
         FakeBackend.centerDept: (<String>[], DivScope.center, 'หน่วยงาน'),
         FakeBackend.allDept: (<String>[], DivScope.all, 'หน่วยงาน'),
+        // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู ขอบเขตทุกหน่วยงาน (ผู้ใช้สั่ง 15 ต.ค. 2569)
         FakeBackend.admin: (
-          [Perm.userResetPassword, Perm.userManage],
-          DivScope.own,
+          [
+            Perm.period,
+            Perm.alertMessage,
+            Perm.editWindow,
+            Perm.userResetPassword,
+            Perm.userManage,
+          ],
+          DivScope.all,
           'ผู้ดูแลระบบ',
         ),
       };
@@ -147,7 +154,8 @@ void main() {
       // backend ส่ง [RESETPWD, ADMIN] แสดงตามลำดับมาตรฐาน
       await signIn(FakeBackend.admin);
       expect(auth.isAdmin, isTrue);
-      expect(auth.isAccount, isFalse);
+      // ผู้ดูแลระบบถือว่ามีทุกบทบาท แต่ป้ายบทบาทยังแสดงตามที่บัญชีถือจริง
+      expect(auth.isAccount, isTrue);
       expect(auth.roleDisplayNames, ['กำหนดรหัสผ่าน', 'ผู้ดูแลระบบ']);
       expect(auth.initials, 'ศ');
     });
@@ -689,9 +697,15 @@ void main() {
       FakeBackend.resetPwd: ('RESETPWD', [UserListScreen.resetTitle]),
       FakeBackend.centerDept: ('CENTER_DEPT', []),
       FakeBackend.allDept: ('ALL_DEPT', []),
+      // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู (ผู้ใช้สั่ง 15 ต.ค. 2569) แม้บัญชีจะถือแค่ RESETPWD + ADMIN
       FakeBackend.admin: (
         'ADMIN',
-        [UserListScreen.resetTitle, UserListScreen.manageTitle],
+        [
+          ...periodMenus,
+          ...accountUpcoming,
+          UserListScreen.resetTitle,
+          UserListScreen.manageTitle,
+        ],
       ),
     };
     final roleMenus = [
@@ -733,7 +747,9 @@ void main() {
         }
         expect(
           _inMenu(SidebarMenu.periodGroupTitle),
-          e.key == FakeBackend.account ? findsOneWidget : findsNothing,
+          e.key == FakeBackend.account || e.key == FakeBackend.admin
+              ? findsOneWidget
+              : findsNothing,
         );
         await settleSnackBar(tester);
       });
@@ -922,6 +938,9 @@ void main() {
         await login(tester, FakeBackend.admin);
         await settleSnackBar(tester);
         await openMenu(tester);
+        // เมนูของผู้ดูแลระบบยาว (มีทุกเมนู) เลื่อนให้เห็นก่อนกด
+        await tester.ensureVisible(_inMenu(UserListScreen.manageTitle));
+        await tester.pumpAndSettle();
         await tester.tap(_inMenu(UserListScreen.manageTitle));
         await tester.pumpAndSettle();
         expect(find.byType(UserListScreen), findsOneWidget);
@@ -1107,6 +1126,9 @@ void main() {
         );
 
         // เปิดหน้าจอจากเมนูที่ตรึง: เมนูยังอยู่ หน้าจอไปเปิดด้านขวา
+        // เมนูของผู้ดูแลระบบยาว (มีทุกเมนู) เลื่อนให้เห็นก่อนกด
+        await tester.ensureVisible(_inMenu(UserListScreen.manageTitle));
+        await tester.pumpAndSettle();
         await tester.tap(_inMenu(UserListScreen.manageTitle));
         await tester.pumpAndSettle();
         expect(find.byType(UserListScreen), findsOneWidget);
@@ -1117,6 +1139,8 @@ void main() {
         );
 
         // เปิดอีกหน้า: แทนหน้าเดิม ไม่ซ้อนกัน แล้วกลับหน้าแรกจากเมนู
+        await tester.ensureVisible(_inMenu(UserListScreen.resetTitle));
+        await tester.pumpAndSettle();
         await tester.tap(_inMenu(UserListScreen.resetTitle));
         await tester.pumpAndSettle();
         expect(find.byType(UserListScreen), findsOneWidget);
@@ -1124,6 +1148,18 @@ void main() {
           tester.widget<UserListScreen>(find.byType(UserListScreen)).mode,
           UserListMode.resetPassword,
         );
+        // เมนูเลื่อนลงไปแล้ว เลื่อนกลับขึ้นมาหาหน้าแรก (ListView สร้างเฉพาะส่วนที่อยู่บนจอ)
+        await tester.scrollUntilVisible(
+          _inMenu('หน้าแรก'),
+          -200,
+          scrollable: find
+              .descendant(
+                of: find.byType(SidebarMenu),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(_inMenu('หน้าแรก'));
         await tester.pumpAndSettle();
         expect(find.byType(UserListScreen), findsNothing);

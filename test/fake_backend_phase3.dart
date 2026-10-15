@@ -255,7 +255,9 @@ extension _FakePhase3Routes on FakeBackend {
     final path = options.path;
     final method = options.method;
     final q = options.queryParameters;
-    bool has(String role) => me.roles.contains(role);
+    // ผู้ดูแลระบบถือว่ามีทุกบทบาท (แบบ User.hasRole ของ backend)
+    bool has(String role) =>
+        me.roles.contains(role) || me.roles.contains('ADMIN');
     ResponseBody conflict(String code, String message, [Map? details]) => _json(
       409,
       {'code': code, 'message': message, 'details': ?details, 'success': false},
@@ -746,6 +748,9 @@ extension _FakePhase3Routes on FakeBackend {
         ...period,
         'type': type,
         'rows': rows,
+        // หนึ่งรายการต่อเลขบัตร: จำลองคนหนึ่งมีสองเลขสมาชิก
+        'stored_rows': rows > 1 ? rows - 1 : rows,
+        'merged_people': rows > 1 ? 1 : 0,
         'total_amount': rows * 1000.25,
         'existing_rows': existing,
         'replaced_rows': dry ? 0 : existing,

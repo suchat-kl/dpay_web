@@ -309,7 +309,9 @@ extension _FakePhase2Routes on FakeBackend {
     final path = options.path;
     final method = options.method;
     final q = options.queryParameters;
-    bool has(String role) => me.roles.contains(role);
+    // ผู้ดูแลระบบถือว่ามีทุกบทบาท (แบบ User.hasRole ของ backend)
+    bool has(String role) =>
+        me.roles.contains(role) || me.roles.contains('ADMIN');
     ResponseBody conflict(String code, String message, [Map? details]) => _json(
       409,
       {'code': code, 'message': message, 'details': ?details, 'success': false},
@@ -497,6 +499,8 @@ extension _FakePhase2Routes on FakeBackend {
           'previous_total': previous,
           'skipped_invalid_idcard': 1,
           'skipped_duplicate_idcard': 0,
+          'dpis_missing_g': 1,
+          'dpis_missing_e': 0,
           'message': 'นำเข้าข้อมูลบุคลากรจาก DPIS สำเร็จ',
           'success': true,
         });

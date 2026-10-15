@@ -117,10 +117,10 @@ void main() {
     c = await api.getDivs();
     expect(c.scope, DivScope.all);
     expect(c.divs, hasLength(30));
-    // ACCOUNT / ADMIN ไม่ได้ขยายขอบเขตเอง
+    // ผู้ดูแลระบบมีสิทธิ์ทุกเมนู = เลือกได้ทุกหน่วยงาน
     await auth.logout();
     await signIn(FakeBackend.admin);
-    expect((await api.getDivs()).scope, DivScope.own);
+    expect((await api.getDivs()).scope, DivScope.all);
   });
 
   testWidgets('ขอบเขต OWN: แสดงหน่วยงานของตัวเองเฉย ๆ เลือกไม่ได้', (

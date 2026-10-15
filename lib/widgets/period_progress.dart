@@ -17,6 +17,7 @@ import '../screens/saha_import_screen.dart';
 import '../services/api_service.dart';
 import '../services/debt_api.dart';
 import '../services/work_api.dart';
+import '../utils/permission.dart';
 import 'screen_parts.dart';
 import 'work_parts.dart';
 
@@ -35,7 +36,12 @@ enum StepState {
   none,
 }
 
-/// ความคืบหน้าของงวด — หน้าแรกของฝ่ายบัญชี (ACCOUNT)
+/// ความคืบหน้าของงวด — หน้าแรก
+///
+/// ฝ่ายบัญชี (ACCOUNT) เห็นครบทุกขั้น ผู้ใช้ทั่วไปเห็นเฉพาะขั้นของหน่วยงาน (ผู้ใช้สั่ง 15 ต.ค. 2569):
+/// ขั้น 5 หน่วยงานบันทึกหนี้ (ไปหน้าบันทึกข้อมูล แก้ได้เฉพาะในช่วงเวลา นอกช่วงดูได้อย่างเดียว)
+/// และขั้น 12 รายงาน (เรียกได้ตลอดตามสิทธิ์ของแต่ละรายงาน) — เลขขั้นคงเดิมให้ตรงกับที่ฝ่ายบัญชีเห็น
+/// ผู้ใช้ทั่วไปไม่เรียกเส้นสรุปของฝ่ายบัญชี
 ///
 /// งานประจำงวดเรียงตามลำดับที่ทำจริง: กำหนดงวด → ช่วงแก้ไข → นำเข้าบุคลากร → เตรียมงวด → หน่วยงานบันทึกหนี้
 /// → นำเข้าฌาปนกิจ → นำเข้าสหกรณ์ → ตรวจยอดเงินกู้ → ไฟล์ส่งกรมบัญชีกลาง → รายงานส่งธนาคาร → รายงานฌาปนกิจ-สลิป → รายงาน
@@ -57,6 +63,14 @@ class PeriodProgress extends StatefulWidget {
   static const String todoLabel = 'ยังไม่ได้ทำ';
   static const String problemLabel = 'ต้องแก้';
 
+  /// ขั้นหน่วยงานบันทึกหนี้ของผู้ใช้ทั่วไป
+  static const String entryEditableText =
+      'อยู่ในช่วงเวลาแก้ไข บันทึก/แก้ไขข้อมูลได้';
+  static const String entryReadOnlyText =
+      'นอกช่วงเวลาแก้ไข ดูข้อมูลได้อย่างเดียว';
+  static const String generalSubtitle =
+      'งานของหน่วยงานในงวดนี้ กดที่ขั้นเพื่อไปทำงานนั้น';
+
   @override
   State<PeriodProgress> createState() => _PeriodProgressState();
 }
@@ -68,12 +82,16 @@ class _Step {
   final String detail;
   final WidgetBuilder screen;
 
+  /// ผู้ใช้ทั่วไปเห็นขั้นนี้ด้วย
+  final bool general;
+
   const _Step(
     this.title,
     this.icon,
     this.screen, {
     this.state = StepState.none,
     this.detail = '',
+    this.general = false,
   });
 }
 
@@ -104,7 +122,14 @@ class _PeriodProgressState extends State<PeriodProgress> {
     }
   }
 
+  /// ฝ่ายบัญชีเห็นทุกขั้น (และโหลดสถานะจากเส้นสรุป) ผู้ใช้ทั่วไปเห็นเฉพาะขั้นของหน่วยงาน
+  bool get _full => widget.apiService.canView(Perm.prepare);
+
   Future<void> _load() async {
+    if (!_full) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
     final api = widget.apiService;
     final dpis = await _try(api.getDpisImport);
@@ -219,6 +244,17 @@ class _PeriodProgressState extends State<PeriodProgress> {
           detail:
               'บันทึกแล้ว ${countText(status['edited'])} จาก ${countText(divs)} หน่วยงาน',
         )
+      else if (!_full)
+        // ผู้ใช้ทั่วไป: ไปหน้าบันทึกข้อมูลของหน่วยงาน หน้านั้นเป็นอ่านอย่างเดียวเองเมื่ออยู่นอกช่วงเวลา
+        _Step(
+          'หน่วยงานบันทึกหนี้',
+          DebtEntryScreen.menuIcon,
+          (_) => DebtEntryScreen(apiService: api),
+          detail: _settings.canEditNow
+              ? PeriodProgress.entryEditableText
+              : PeriodProgress.entryReadOnlyText,
+          general: true,
+        )
       else
         // backend ยังไม่มีเส้นสถานะรายหน่วยงาน (หรืองวดไม่มีประวัติ): ทางลัดไปหน้าบันทึกข้อมูล + จำนวนจากการเตรียมงวด
         _Step(
@@ -294,6 +330,7 @@ class _PeriodProgressState extends State<PeriodProgress> {
         ReportScreen.menuTitle,
         ReportScreen.menuIcon,
         (_) => ReportScreen(apiService: api),
+        general: true,
       ),
     ];
   }
@@ -389,14 +426,19 @@ class _PeriodProgressState extends State<PeriodProgress> {
 
   @override
   Widget build(BuildContext context) {
+    final full = _full;
     return ListenableBuilder(
       listenable: _settings,
       builder: (context, _) => StepCard(
         key: PeriodProgress.cardKey,
         icon: Icons.checklist_rtl,
         title: PeriodProgress.title,
-        subtitle: 'งานประจำงวดเรียงตามลำดับ กดที่ขั้นเพื่อไปทำงานนั้น',
-        trailing: _loading
+        subtitle: full
+            ? 'งานประจำงวดเรียงตามลำดับ กดที่ขั้นเพื่อไปทำงานนั้น'
+            : PeriodProgress.generalSubtitle,
+        trailing: !full
+            ? null
+            : _loading
             ? const SizedBox(
                 width: 20,
                 height: 20,
@@ -413,7 +455,9 @@ class _PeriodProgressState extends State<PeriodProgress> {
           maxColumns: 3,
           spacing: 10,
           children: [
-            for (final (i, step) in _steps().indexed) _tile(i + 1, step),
+            // เลขขั้นนับจากรายการเต็ม ผู้ใช้ทั่วไปจึงเห็นเลขเดียวกับฝ่ายบัญชี (5, 12)
+            for (final (i, step) in _steps().indexed)
+              if (full || step.general) _tile(i + 1, step),
           ],
         ),
       ),

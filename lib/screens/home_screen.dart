@@ -114,10 +114,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             onRetry: _settings.loadAlertMessage,
                           ),
                         if (_auth.isLoggedIn) _buildStatusSection(),
-                        // ฝ่ายบัญชี: ความคืบหน้าของงานประจำงวด พร้อมทางลัดไปแต่ละเมนู
+                        // ความคืบหน้าของงานประจำงวด พร้อมทางลัดไปแต่ละเมนู — ฝ่ายบัญชีเห็นทุกขั้น
+                        // ผู้ใช้ทั่วไปเห็นเฉพาะขั้นหน่วยงานบันทึกหนี้กับรายงาน
                         if (_auth.isLoggedIn &&
                             !_auth.mustChangePassword &&
-                            _auth.canView(Perm.prepare)) ...[
+                            (_auth.canView(Perm.prepare) ||
+                                _auth.canView(Perm.debtEntry))) ...[
                           SizedBox(height: isDesktop ? 24 : 16),
                           PeriodProgress(apiService: ApiService()),
                         ],

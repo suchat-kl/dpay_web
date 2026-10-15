@@ -13,6 +13,7 @@ import 'package:dpay/providers/auth_provider.dart';
 import 'package:dpay/providers/settings_provider.dart';
 import 'package:dpay/screens/cgd_files_screen.dart';
 import 'package:dpay/screens/chapana_import_screen.dart';
+import 'package:dpay/screens/div_status_screen.dart';
 import 'package:dpay/screens/debt_entry_screen.dart';
 import 'package:dpay/screens/deduct_screen.dart';
 import 'package:dpay/screens/loan_check_screen.dart';
@@ -902,6 +903,21 @@ void main() {
         );
         expect(backend.p3.sahaRows['G'], 10);
         expect(find.textContaining('ข้าราชการ 10 แถว'), findsOneWidget);
+        // บันทึกเป็นหนึ่งรายการต่อเลขบัตร และแสดงรายการปัญหาของการนำเข้าครั้งนี้ด้วย
+        expect(
+          find.textContaining(
+            'บันทึก 9 รายการ (หนึ่งรายการต่อเลขบัตร — รวมยอดคนที่มีหลายเลขสมาชิก 1 คน)',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(SahaImportScreen.importedProblemsKey),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(SahaImportScreen.problemKey('NOT_FOUND')),
+          findsOneWidget,
+        );
         expect(
           find.descendant(
             of: find.byKey(SahaImportScreen.summaryKey),
@@ -1353,8 +1369,15 @@ void main() {
     testWidgets('เส้นสรุปใช้ไม่ได้: ขั้นนั้นเป็นทางลัดเฉย ๆ ไม่พัง', (
       tester,
     ) async {
-      // บัญชีที่ไม่ใช่ฝ่ายบัญชีได้ 403 ทุกเส้นสรุป (จำลองเส้นล้ม)
-      await pump(tester, host(), as: FakeBackend.user);
+      backend.failPaths.addAll([
+        '/api/period/dpis-import',
+        '/api/period/prepare',
+        '/api/debts/div-status',
+        '/api/chapana/summary',
+        '/api/saha/summary',
+        '/api/loans/check',
+      ]);
+      await pump(tester, host());
       expect(tester.takeException(), isNull);
       expect(status(tester, 1), PeriodProgress.doneLabel);
       for (final n in [3, 4, 5, 6, 7, 8]) {
@@ -1362,6 +1385,31 @@ void main() {
         expect(find.byKey(PeriodProgress.stepKey(n)), findsOneWidget);
       }
     });
+
+    testWidgets(
+      'ผู้ใช้ทั่วไป: เห็นเฉพาะขั้น 5 หน่วยงานบันทึกหนี้ กับ 12 รายงาน ไม่เรียกเส้นสรุป กดแล้วไปหน้าบันทึกข้อมูล/รายงาน',
+      (tester) async {
+        await pump(tester, host(), as: FakeBackend.user);
+        expect(backend.calls, isEmpty, reason: 'ไม่เรียกเส้นสรุปของฝ่ายบัญชี');
+        for (var n = 1; n <= 12; n++) {
+          expect(
+            find.byKey(PeriodProgress.stepKey(n)),
+            n == 5 || n == 12 ? findsOneWidget : findsNothing,
+            reason: 'ขั้นที่ $n',
+          );
+        }
+        expect(status(tester, 5), isNull);
+
+        await tapKey(tester, PeriodProgress.stepKey(5));
+        expect(find.byType(DebtEntryScreen), findsOneWidget);
+        expect(find.byType(DivStatusScreen), findsNothing);
+        await tester.tap(find.byTooltip('ปิด'));
+        await tester.pumpAndSettle();
+
+        await tapKey(tester, PeriodProgress.stepKey(12));
+        expect(find.byType(ReportScreen), findsOneWidget);
+      },
+    );
   });
 
   group('ของเดิมที่ใช้เส้นใหม่', () {

@@ -352,7 +352,8 @@ void main() {
       'บัญชีที่ไม่ใช่ฝ่ายบัญชีบันทึก: แสดงข้อความ 403 ข้อความเดิมไม่เปลี่ยน',
       (tester) async {
         final original = backend.alertMessage;
-        await tester.runAsync(() => signIn(FakeBackend.admin));
+        // ผู้ดูแลระบบมีสิทธิ์ทุกเมนูแล้ว ใช้บัญชีกำหนดรหัสผ่าน (ไม่ใช่ฝ่ายบัญชี) แทน
+        await tester.runAsync(() => signIn(FakeBackend.resetPwd));
         await pump(tester, AlertMessageScreen(apiService: api));
 
         await tester.enterText(field, 'ลองแก้');
@@ -701,7 +702,6 @@ void main() {
       FakeBackend.resetPwd,
       FakeBackend.centerDept,
       FakeBackend.allDept,
-      FakeBackend.admin,
     ]) {
       await signIn(u);
       expect((await api.getPeriod()).label, 'กรกฎาคม 2568', reason: u);

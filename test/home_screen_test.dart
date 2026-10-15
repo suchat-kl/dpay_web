@@ -267,6 +267,12 @@ void main() {
         expect(find.text(PeriodProgress.entryEditableText), findsOneWidget);
         expect(find.text(PeriodProgress.generalSubtitle), findsOneWidget);
         expect(find.byKey(PeriodProgress.refreshKey), findsNothing);
+        // คำขอปกติยังรอได้ 30 วินาทีตามค่าตั้งต้น (ขยายเฉพาะงานยาว)
+        expect(backend.connectTimeouts, isNotEmpty);
+        expect(
+          backend.connectTimeouts,
+          everyElement(const Duration(seconds: 30)),
+        );
         for (final path in [
           'GET /api/period/dpis-import',
           'GET /api/period/prepare',

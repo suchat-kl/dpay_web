@@ -318,11 +318,15 @@ class FakeBackend implements HttpClientAdapter {
   final List<String?> authHeaders = [];
 
   /// ล้างบันทึกคำขอทั้งหมด (ใช้หลังเข้าสู่ระบบใน setUp เพื่อดูเฉพาะคำขอของเทสต์)
+  /// connectTimeout ของแต่ละคำขอ (บนเว็บคือเวลาที่รอ backend ประมวลผลจนได้ header)
+  final List<Duration?> connectTimeouts = [];
+
   void clearLog() {
     calls.clear();
     queries.clear();
     bodies.clear();
     authHeaders.clear();
+    connectTimeouts.clear();
   }
 
   /// ตัวข้อมูลของคำขอล่าสุดที่ตรงกับ [call] (รูป "METHOD path")
@@ -527,6 +531,7 @@ class FakeBackend implements HttpClientAdapter {
     final auth = options.headers['Authorization'] as String?;
     calls.add('$method $path');
     authHeaders.add(auth);
+    connectTimeouts.add(options.connectTimeout);
     final data = options.data;
     // อัปโหลดไฟล์ (multipart): บันทึกช่องของฟอร์ม + ชื่อและขนาดไฟล์ ให้เทสต์ตรวจได้
     final body = data is Map

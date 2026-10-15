@@ -1,6 +1,7 @@
 // เทสต์หน้าแรก: ข้อความแจ้งผู้ใช้งาน (ไม่ต้องเข้าสู่ระบบ) ปุ่มเข้าสู่ระบบ
 // และการ์ดหน่วยงาน / งวดปัจจุบัน / ระยะเวลาแก้ไขข้อมูลหลังเข้าสู่ระบบ
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dpay/config/app_config.dart';
@@ -363,6 +364,37 @@ void main() {
       expect(find.byKey(PeriodProgress.stepKey(12)), findsOneWidget);
       expect(find.text(PeriodProgress.entryReadOnlyText), findsOneWidget);
       expect(find.text(PeriodProgress.entryEditableText), findsNothing);
+
+      // ชี้เมาส์ที่การ์ด: ลอยขึ้น เงาเข้มขึ้น เอาเมาส์ออกกลับที่เดิม
+      double shadowOf(Key k) =>
+          ((tester.widget<AnimatedContainer>(find.byKey(k)).decoration!
+                      as BoxDecoration)
+                  .boxShadow!
+                  .single)
+              .blurRadius;
+      final card = HomeScreen.divCardKey;
+      final restTop = tester.getTopLeft(find.byKey(card)).dy;
+      expect(shadowOf(card), 10);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.byKey(card)));
+      await tester.pumpAndSettle();
+      expect(shadowOf(card), 18);
+      expect(tester.getTopLeft(find.byKey(card)).dy, lessThan(restTop));
+      // ขั้นในความคืบหน้าของงวดก็ลอยเหมือนกัน
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(PeriodProgress.stepKey(12))),
+      );
+      await tester.pumpAndSettle();
+      expect(shadowOf(card), 10);
+      expect(tester.getTopLeft(find.byKey(card)).dy, restTop);
+      expect(
+        tester
+            .widget<Material>(find.byKey(PeriodProgress.stepKey(12)))
+            .elevation,
+        4,
+      );
     });
 
     testWidgets(

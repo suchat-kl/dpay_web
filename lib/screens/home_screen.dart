@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../utils/permission.dart';
+import '../widgets/hover_lift.dart';
 import '../widgets/alert_message_box.dart';
 import '../widgets/footer.dart';
 import '../widgets/header.dart';
@@ -205,44 +206,54 @@ class _HomeScreenState extends State<HomeScreen> {
     required List<Widget> children,
     Widget? trailing,
   }) {
-    return Container(
-      key: key,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.dividerColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+    // ชี้เมาส์แล้วการ์ดลอยขึ้นเล็กน้อย เงาเข้มและขอบเป็นสีหลัก (ผู้ใช้สั่ง 15 ต.ค. 2569)
+    return HoverLift(
+      lift: 4,
+      scale: 1.02,
+      builder: (hovered) => AnimatedContainer(
+        key: key,
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hovered
+                ? AppTheme.primaryColor.withValues(alpha: 0.45)
+                : AppTheme.dividerColor,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: screenText(
-                    size: 14.5,
-                    weight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: hovered ? 0.12 : 0.04),
+              blurRadius: hovered ? 18 : 10,
+              offset: Offset(0, hovered ? 8 : 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: screenText(
+                      size: 14.5,
+                      weight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
-              ),
-              ?trailing,
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...children,
-        ],
+                ?trailing,
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...children,
+          ],
+        ),
       ),
     );
   }

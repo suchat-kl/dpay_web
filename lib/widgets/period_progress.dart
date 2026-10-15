@@ -18,6 +18,7 @@ import '../services/api_service.dart';
 import '../services/debt_api.dart';
 import '../services/work_api.dart';
 import '../utils/permission.dart';
+import 'hover_lift.dart';
 import 'screen_parts.dart';
 import 'work_parts.dart';
 
@@ -342,13 +343,26 @@ class _PeriodProgressState extends State<PeriodProgress> {
       StepState.problem => (PeriodProgress.problemLabel, AppTheme.dangerColor),
       StepState.none => ('', AppTheme.neutralColor),
     };
+    // ชี้เมาส์แล้วขั้นลอยขึ้นเล็กน้อยแบบเดียวกับการ์ดบนหน้าแรก
+    return HoverLift(
+      lift: 3,
+      scale: 1.02,
+      builder: (hovered) => _tileBody(n, s, color, label, hovered),
+    );
+  }
+
+  Widget _tileBody(int n, _Step s, Color color, String label, bool hovered) {
     return Material(
       key: PeriodProgress.stepKey(n),
       color: Colors.white,
+      elevation: hovered ? 4 : 0,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
         side: BorderSide(
-          color: s.state == StepState.none
+          color: hovered
+              ? AppTheme.primaryColor.withValues(alpha: 0.5)
+              : s.state == StepState.none
               ? AppTheme.dividerColor
               : color.withValues(alpha: 0.45),
         ),

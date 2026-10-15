@@ -518,6 +518,26 @@ void main() {
     );
 
     testWidgets(
+      'หน่วยงานส่วนกลาง (เลือกได้หลายหน่วยงาน): ออกรายงานสรุปหน่วยงานประจำเดือนได้ตามระบบเดิม แต่ไม่เห็นรายงานอื่นของฝ่ายบัญชี',
+      (tester) async {
+        await pump(
+          tester,
+          ReportScreen(apiService: api),
+          as: FakeBackend.centerDept,
+        );
+        expect(find.text('รายงานทั้งกรม'), findsOneWidget);
+        expect(
+          find.byKey(ReportScreen.runKey('rep2-all-dept')),
+          findsOneWidget,
+        );
+        expect(find.byKey(ReportScreen.runKey('rep10')), findsNothing);
+        await download(tester, ReportScreen.runKey('rep2-all-dept'));
+        expect(backend.calls, contains('GET /api/reports/rep2-all-dept'));
+        expect(find.textContaining('ไม่มีสิทธิ์'), findsNothing);
+      },
+    );
+
+    testWidgets(
       'หน่วยงานทั่วไป: รายงานของหน่วยงานตัวเอง ออก PDF เปิดดูได้ ไม่มีข้อมูล = ข้อความใต้รายงาน',
       (tester) async {
         await pump(tester, ReportScreen(apiService: api), as: FakeBackend.user);
@@ -798,7 +818,7 @@ void main() {
     testWidgets(
       'เลือกไฟล์ → ตรวจก่อน (dry_run) แสดงสรุปและปัญหาแยกชนิด → นำเข้า → นำเข้าซ้ำบอกจำนวนที่จะถูกแทน',
       (tester) async {
-        await open(tester, () => file('saha.txt'));
+        await open(tester, () => file('coopG.dat'));
         // เปิดหน้าแล้วถามด้วยว่ามีการนำเข้าค้างอยู่ไหม (ไม่มี = ไม่ถามซ้ำ)
         expect(backend.calls.toSet(), {
           'GET /api/saha/summary',
@@ -812,7 +832,7 @@ void main() {
         expect(enabled(tester, SahaImportScreen.importKey), isFalse);
 
         await tapKey(tester, SahaImportScreen.pickKey);
-        expect(find.text('saha.txt (1,060 ไบต์)'), findsOneWidget);
+        expect(find.text('coopG.dat (1,060 ไบต์)'), findsOneWidget);
         expect(enabled(tester, SahaImportScreen.checkKey), isTrue);
         expect(enabled(tester, SahaImportScreen.importKey), isFalse);
 
@@ -823,7 +843,7 @@ void main() {
           'type': 'G',
           'dry_run': 'true',
           'confirm_replace': 'false',
-          'file': 'saha.txt',
+          'file': 'coopG.dat',
           'file_size': 1060,
         });
         // ตรวจอย่างเดียว ยังไม่บันทึก
@@ -838,7 +858,12 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: facts, matching: find.text('5 รายการ')),
+          find.descendant(of: facts, matching: find.text('6 รายการ')),
+          findsOneWidget,
+        );
+        // ชื่อใกล้เคียง: บอกว่าจับคู่กับใคร ให้ตรวจทาน
+        expect(
+          find.textContaining('จับคู่กับ นายสมมุติใกล้ เคียงชื่อ'),
           findsOneWidget,
         );
         for (final kind in SahaImportScreen.problemKinds.entries) {
@@ -919,21 +944,29 @@ void main() {
       'ไฟล์ใช้ไม่ได้: นามสกุลผิด ใหญ่เกิน 5 MB ผิดรูปแบบ (บอกบรรทัด) และเปลี่ยนประเภทต้องตรวจใหม่',
       (tester) async {
         final queue = <PickedFile>[
-          file('saha.xlsx'),
-          PickedFile('big.txt', Uint8List(0), size: 6 * 1024 * 1024),
-          file('bad.txt'),
-          file('saha.dat', rows: 3),
+          file('saha.dat'),
+          file('coopg.dat'),
+          file('coopG.txt'),
+          PickedFile('coopG.dat', Uint8List(0), size: 6 * 1024 * 1024),
+          file('coopG.dat'),
+          file('coopG.DAT', rows: 3),
+          file('coopE.dat', rows: 3),
         ];
         await open(tester, () => queue.removeAt(0));
         backend.clearLog();
 
-        await tapKey(tester, SahaImportScreen.pickKey);
-        expect(find.text(SahaImportScreen.wrongTypeText), findsOneWidget);
-        expect(enabled(tester, SahaImportScreen.checkKey), isFalse);
+        // ชื่อไฟล์ต้องเป็น coopG.dat / coopE.dat (ตัวอักษรประเภทเป็นตัวพิมพ์ใหญ่ นามสกุลไม่สนตัวพิมพ์)
+        expect(find.text(SahaImportScreen.fileNameHint), findsOneWidget);
+        for (var i = 0; i < 3; i++) {
+          await tapKey(tester, SahaImportScreen.pickKey);
+          expect(find.text(SahaImportScreen.wrongNameText), findsOneWidget);
+          expect(enabled(tester, SahaImportScreen.checkKey), isFalse);
+        }
         await tapKey(tester, SahaImportScreen.pickKey);
         expect(find.text(SahaImportScreen.tooBigText), findsOneWidget);
         expect(backend.calls, isEmpty);
 
+        backend.p3.sahaBadFile = true;
         await tapKey(tester, SahaImportScreen.pickKey);
         await tapKey(tester, SahaImportScreen.checkKey);
         expect(
@@ -943,27 +976,62 @@ void main() {
         expect(find.textContaining('มี 2 บรรทัดที่ผิดรูปแบบ'), findsOneWidget);
         expect(find.textContaining('บรรทัดที่: 4, 9'), findsOneWidget);
         expect(find.byKey(SahaImportScreen.checkResultKey), findsNothing);
+        backend.p3.sahaBadFile = false;
 
         await tapKey(tester, SahaImportScreen.pickKey);
         await tapKey(tester, SahaImportScreen.checkKey);
         expect(find.byKey(SahaImportScreen.checkResultKey), findsOneWidget);
+        // เปลี่ยนเป็นลูกจ้างประจำทั้งที่ไฟล์เป็น coopG: ผลตรวจและไฟล์ถูกยกเลิก ต้องเลือก coopE.dat
         await tapKey(tester, SahaImportScreen.typeKey('E'));
         expect(find.byKey(SahaImportScreen.checkResultKey), findsNothing);
+        expect(
+          find.text(SahaImportScreen.fileTypeChangedText('E')),
+          findsOneWidget,
+        );
+        expect(enabled(tester, SahaImportScreen.checkKey), isFalse);
         expect(enabled(tester, SahaImportScreen.importKey), isFalse);
+        // เลือก coopE.dat: ประเภทตามชื่อไฟล์ ส่งเป็น E
+        await tapKey(tester, SahaImportScreen.pickKey);
         await tapKey(tester, SahaImportScreen.checkKey);
         expect(backend.bodyOf('POST /api/saha/import')!['type'], 'E');
+        expect(backend.bodyOf('POST /api/saha/import')!['file'], 'coopE.dat');
       },
     );
+
+    testWidgets('เลือกไฟล์ coopE.dat: เลือกประเภทลูกจ้างประจำให้ตามชื่อไฟล์', (
+      tester,
+    ) async {
+      await open(tester, () => file('coopE.dat'));
+      expect(SahaImportScreen.typeOfFileName('coopE.dat'), 'E');
+      expect(SahaImportScreen.typeOfFileName('C:\\fakepath\\coopG.DAT'), 'G');
+      expect(SahaImportScreen.typeOfFileName('coope.dat'), isNull);
+      await tapKey(tester, SahaImportScreen.pickKey);
+      expect(find.text('coopE.dat (1,060 ไบต์)'), findsOneWidget);
+      await tapKey(tester, SahaImportScreen.checkKey);
+      expect(backend.bodyOf('POST /api/saha/import')!['type'], 'E');
+      expect(find.byKey(SahaImportScreen.checkResultKey), findsOneWidget);
+      // จำนวนที่หาเลขบัตรได้ แยกตามแหล่ง (คู่เดิม / งวดก่อน / รายชื่อ / รายการหนี้)
+      for (final label in [
+        'จับคู่ได้จากที่เคยจดไว้',
+        'จากข้อมูลสหกรณ์งวดก่อน',
+        'จากรายชื่อบุคลากร (ชื่อ-สกุล)',
+        'จากรายการหนี้ของงวด (ชื่อ-สกุล)',
+        'จากชื่อใกล้เคียง (ตรวจทานในรายการปัญหา)',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+    });
 
     testWidgets(
       'ไฟล์น่าจะเป็นของอีกประเภท (400 SAHA_TYPE_MISMATCH): แสดงข้อความของ backend + ประเภทที่ควรเลือก ไม่มีผลตรวจ ไม่บันทึก',
       (tester) async {
-        final queue = <PickedFile>[file('other_type.txt'), file('saha.txt')];
-        await open(tester, () => queue.removeAt(0));
+        await open(tester, () => file('coopG.dat'));
 
         // ตรวจไฟล์ (dry_run) ถูกปฏิเสธ
+        backend.p3.sahaOtherTypeFile = true;
         await tapKey(tester, SahaImportScreen.pickKey);
         await tapKey(tester, SahaImportScreen.checkKey);
+        backend.p3.sahaOtherTypeFile = false;
         expect(
           find.textContaining(FakePhase3.sahaTypeMismatchMessage('G')),
           findsOneWidget,
@@ -1003,7 +1071,7 @@ void main() {
           'expires_at': '2026-10-14T10:45:30.000+07:00',
           'detail': {'type': 'G', 'month': '10', 'year': '2569'},
         };
-        await open(tester, () => file('saha.txt'));
+        await open(tester, () => file('coopG.dat'));
         expect(backend.calls, contains('GET /api/saha/import-status'));
         final bar = find.byKey(SahaImportScreen.jobKey);
         expect(bar, findsOneWidget);
@@ -1056,7 +1124,7 @@ void main() {
     testWidgets(
       'กดนำเข้าแล้วมีงานของหน้าต่างอื่นค้างอยู่ (JOB_RUNNING): แสดงสถานะงานนั้นและรอ ไม่มีอะไรถูกบันทึก',
       (tester) async {
-        await open(tester, () => file('saha.txt'));
+        await open(tester, () => file('coopG.dat'));
         expect(find.byKey(SahaImportScreen.jobKey), findsNothing);
         await tapKey(tester, SahaImportScreen.pickKey);
         await tapKey(tester, SahaImportScreen.checkKey);
@@ -1165,7 +1233,7 @@ void main() {
           tester,
           SahaImportScreen(
             apiService: api,
-            pickFile: () async => PickedFile('saha.txt', Uint8List(1060)),
+            pickFile: () async => PickedFile('coopG.dat', Uint8List(1060)),
           ),
         );
         await tapKey(tester, SahaImportScreen.pickKey);

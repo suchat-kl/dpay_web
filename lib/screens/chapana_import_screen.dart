@@ -28,7 +28,7 @@ class ChapanaImportScreen extends StatefulWidget {
 
   static const String menuTitle = 'นำเข้าข้อมูลฌาปนกิจ';
   static const IconData menuIcon = Icons.volunteer_activism_outlined;
-  static const String groupTitle = 'ฌาปนกิจ';
+  static const String groupTitle = 'ฌาปนกิจ - สหกรณ์';
 
   static const Key runKey = ValueKey('chapana-run');
   static const Key summaryKey = ValueKey('chapana-summary');

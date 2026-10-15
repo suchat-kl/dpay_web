@@ -30,6 +30,9 @@ class ReportDef {
   /// เฉพาะฝ่ายบัญชี (ทั้งกรม ไม่ส่งหน่วยงาน)
   final bool accountOnly;
 
+  /// รายงานทั้งกรมที่ผู้เลือกได้หลายหน่วยงาน (ขอบเขตส่วนกลาง/ทุกหน่วยงาน) ออกได้ด้วย ตามสิทธิ์ในระบบเดิม
+  final bool wideScope;
+
   const ReportDef({
     required this.key,
     required this.name,
@@ -38,6 +41,7 @@ class ReportDef {
     this.needsType = false,
     this.bank,
     this.accountOnly = false,
+    this.wideScope = false,
   });
 }
 
@@ -120,8 +124,10 @@ class ReportScreen extends StatefulWidget {
       key: 'rep2-all-dept',
       name: 'rep2-all-dept',
       title: 'รายละเอียดหักเงินสรุปหน่วยงานประจำเดือน',
-      description: 'สรุปเงินหักทุกหน่วยงานทั้งกรม (ฝ่ายบัญชี)',
+      description:
+          'สรุปเงินหักทุกหน่วยงานทั้งกรม (ฝ่ายบัญชี และหน่วยงานที่เลือกได้หลายหน่วยงาน)',
       accountOnly: true,
+      wideScope: true,
     ),
     ReportDef(
       key: 'rep10',
@@ -149,6 +155,9 @@ class _ReportScreenState extends State<ReportScreen>
 
   bool get _isAccount => widget.apiService.hasRole(Roles.account);
   bool get _canAllDivs => widget.apiService.divScope == DivScope.all;
+
+  /// เลือกได้หลายหน่วยงาน (ส่วนกลาง/ทุกหน่วยงาน) — ออกรายงานทั้งกรมบางรายงานได้ตามระบบเดิม
+  bool get _wideScope => widget.apiService.divScope != DivScope.own;
 
   /// เปลี่ยนตัวเลือก: ไฟล์และข้อความเดิมไม่ตรงกับตัวเลือกใหม่แล้ว
   void _changed(VoidCallback apply) {
@@ -326,12 +335,16 @@ class _ReportScreenState extends State<ReportScreen>
           for (final r in perDiv)
             if (r.bank != null) r,
         ]),
-        if (_isAccount) ...[
+        if (_isAccount || _wideScope) ...[
           const SizedBox(height: 12),
-          _section('รายงานทั้งกรม (ฝ่ายบัญชี)', 'ไม่ขึ้นกับหน่วยงานที่เลือก', [
-            for (final r in ReportScreen.reports)
-              if (r.accountOnly) r,
-          ]),
+          _section(
+            _isAccount ? 'รายงานทั้งกรม (ฝ่ายบัญชี)' : 'รายงานทั้งกรม',
+            'ไม่ขึ้นกับหน่วยงานที่เลือก',
+            [
+              for (final r in ReportScreen.reports)
+                if (r.accountOnly && (_isAccount || r.wideScope)) r,
+            ],
+          ),
         ],
       ],
     );

@@ -56,6 +56,15 @@ class FakePhase3 {
       'total_amount': 650,
       'mapped_type': 'E',
     },
+    {
+      'kind': 'FUZZY_MATCH',
+      'matched_name': 'นายสมมุติใกล้ เคียงชื่อ',
+      'line': 18,
+      'saha_id': '000115',
+      'name': 'นายสมมุติข้าม ตัวอย่าง',
+      'idcard_used': fakeIdCard(15),
+      'total_amount': 650,
+    },
   ];
 
   /// รายการที่เลขบัตรยังเป็นเลขปลอม
@@ -72,6 +81,10 @@ class FakePhase3 {
 
   /// จำลองคู่เลขสมาชิกเปลี่ยนหลังตรวจไฟล์: ตรวจ (dry_run) ผ่าน แต่นำเข้าจริงตอบ SAHA_TYPE_MISMATCH
   bool sahaMismatchOnImport = false;
+
+  /// จำลองไฟล์ผิดรูปแบบ (400 บอกบรรทัดที่ผิด) / ไฟล์ที่คนส่วนใหญ่เคยจับคู่เป็นอีกประเภท (400 SAHA_TYPE_MISMATCH)
+  bool sahaBadFile = false;
+  bool sahaOtherTypeFile = false;
 
   /// การนำเข้าที่ค้างอยู่ที่ server (ของหน้าต่างอื่น) — null = ไม่มี; มีอยู่ = นำเข้าจริงตอบ 409 JOB_RUNNING
   Map<String, dynamic>? sahaJob;
@@ -215,7 +228,7 @@ class FakePhase3 {
       'งวดนี้มีข้อมูลสหกรณ์ของประเภทนี้แล้ว';
   static const String sahaBadFileMessage = 'ไฟล์ผิดรูปแบบ';
 
-  /// ข้อความของ 400 SAHA_TYPE_MISMATCH (ไฟล์ที่ชื่อมีคำว่า other ถือเป็นไฟล์ของอีกประเภท)
+  /// ข้อความของ 400 SAHA_TYPE_MISMATCH (ตั้ง sahaOtherTypeFile)
   static String sahaTypeMismatchMessage(String type) =>
       'ไฟล์นี้น่าจะเป็นของ${type == 'G' ? 'ลูกจ้างประจำ' : 'ข้าราชการ'} ไม่ใช่ประเภทที่เลือก: '
       'เคยจับคู่ไว้เป็นอีกประเภท 8 ราย ตรงประเภทเพียง 1 ราย จึงไม่ได้นำเข้า';
@@ -571,7 +584,9 @@ extension _FakePhase3Routes on FakeBackend {
       final isBank = report.group(1) != null;
       final name = report.group(2)!;
       final accountOnly = isBank || name == 'rep2-all-dept' || name == 'rep10';
-      if (accountOnly && !has('ACCOUNT')) return _forbidden();
+      // สรุปหน่วยงานประจำเดือน: ฝ่ายบัญชี หรือขอบเขตส่วนกลาง/ทุกหน่วยงาน (ตามระบบเดิม)
+      final wideScope = name == 'rep2-all-dept' && _scope(me) != 'OWN';
+      if (accountOnly && !has('ACCOUNT') && !wideScope) return _forbidden();
       if (isBank) {
         if (!const ['AIA', 'GHB', 'GSB', 'KTB'].contains(name)) {
           return _bad('ไม่รู้จักธนาคาร $name');
@@ -665,7 +680,24 @@ extension _FakePhase3Routes on FakeBackend {
       final fileName = '${body?['file'] ?? ''}';
       final size = body?['file_size'] as int? ?? 0;
       if (fileName.isEmpty) return _bad('กรุณาแนบไฟล์');
-      if (fileName.contains('bad')) {
+      // ชื่อไฟล์ต้องเป็น coopG.dat / coopE.dat ตรงกับประเภท (แบบ SahaService.checkFileName)
+      final named = RegExp(r'^coop([GE])\.(dat|DAT)$').firstMatch(fileName);
+      if (named == null) {
+        return _json(400, {
+          'code': 'SAHA_FILE_NAME_INVALID',
+          'message':
+              'ชื่อไฟล์ต้องเป็น coopG.dat (ข้าราชการ) หรือ coopE.dat (ลูกจ้างประจำ)',
+          'success': false,
+        });
+      }
+      if (named.group(1) != type) {
+        return _json(400, {
+          'code': 'SAHA_FILE_NAME_MISMATCH',
+          'message': 'ชื่อไฟล์เป็นของอีกประเภท ไม่ตรงกับประเภทที่เลือก',
+          'success': false,
+        });
+      }
+      if (p3.sahaBadFile) {
         return _json(400, {
           'code': 'BAD_REQUEST',
           'message': FakePhase3.sahaBadFileMessage,
@@ -678,7 +710,7 @@ extension _FakePhase3Routes on FakeBackend {
         });
       }
       // จริง = เลขสมาชิกที่เคยจับคู่ไว้ส่วนใหญ่เป็นอีกประเภท ตรวจก่อน CONFIRM_REQUIRED ทั้ง dry_run และนำเข้าจริง
-      if (fileName.contains('other') ||
+      if (p3.sahaOtherTypeFile ||
           (p3.sahaMismatchOnImport && body?['dry_run'] != 'true')) {
         return _json(400, {
           'code': 'SAHA_TYPE_MISMATCH',
@@ -718,7 +750,10 @@ extension _FakePhase3Routes on FakeBackend {
         'existing_rows': existing,
         'replaced_rows': dry ? 0 : existing,
         'matched_by_mapping': rows > 4 ? rows - 4 : 0,
+        'matched_by_history': 3,
         'matched_by_name': 2,
+        'matched_by_debt': 1,
+        'matched_by_similar': 1,
         'new_mappings': dry ? 0 : 2,
         'problem_count': p3.sahaProblems.length,
         'problem_counts': counts,

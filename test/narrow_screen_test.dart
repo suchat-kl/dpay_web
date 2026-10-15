@@ -692,7 +692,7 @@ void main() {
         final screens = <Widget>[
           SahaImportScreen(
             apiService: api,
-            pickFile: () async => PickedFile('saha.txt', Uint8List(1060)),
+            pickFile: () async => PickedFile('coopG.dat', Uint8List(1060)),
           ),
           ChapanaImportScreen(apiService: api),
           CgdFilesScreen(apiService: api),

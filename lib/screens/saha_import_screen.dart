@@ -91,15 +91,20 @@ class SahaImportScreen extends StatefulWidget {
   static const Map<String, (String, String)> problemKinds = {
     'MULTIPLE_MATCH': (
       'พบหลายคน',
-      'ชื่อตรงกับบุคลากรหลายคน ระบบใช้คนแรกที่พบไปก่อน',
+      'ชื่อตรงกับบุคลากรหลายคน ระบบไม่เดา — จับคู่เลขบัตรเองในรายการที่ยังไม่ได้แก้',
     ),
     'NOT_FOUND': (
       'ไม่พบ',
-      'ไม่พบชื่อนี้ในข้อมูลบุคลากร ระบบตั้งเลขบัตรปลอมไว้ก่อน',
+      'ไม่พบชื่อนี้ในรายชื่อบุคลากรของประเภทนี้ — จับคู่เลขบัตรเองในรายการที่ยังไม่ได้แก้',
     ),
     'FAKE_IDCARD': (
       'เลขบัตรปลอม',
       'สมาชิกนี้เคยถูกจดไว้ด้วยเลขบัตรปลอมและยังไม่ได้แก้',
+    ),
+    'FUZZY_MATCH': (
+      'ชื่อใกล้เคียง',
+      'ชื่อในไฟล์ไม่ตรงทุกตัวอักษร ระบบจับคู่กับคนที่ชื่อใกล้ที่สุด (ต่างไม่เกิน 2 ตัวอักษร) และจดคู่แล้ว '
+          '— ตรวจว่าเป็นคนเดียวกัน ถ้าผิดคนให้แก้การจับคู่',
     ),
     'IDCARD_ALREADY_MAPPED': (
       'เลขบัตรถูกผูกแล้ว',
@@ -118,7 +123,25 @@ class SahaImportScreen extends StatefulWidget {
 
   static const String emptySummaryText = 'งวดนี้ยังไม่ได้นำเข้าข้อมูลสหกรณ์';
   static const String tooBigText = 'ไฟล์ใหญ่เกิน 5 MB นำเข้าไม่ได้';
-  static const String wrongTypeText = 'เลือกได้เฉพาะไฟล์ .txt หรือ .dat';
+
+  /// ชื่อไฟล์สหกรณ์: coopG.dat = ข้าราชการ, coopE.dat = ลูกจ้างประจำ (ผู้ใช้กำหนด 14 ต.ค. 2569 — นามสกุลไม่สนตัวพิมพ์)
+  /// ไฟล์ไม่มีช่องบอกประเภท ชื่อไฟล์จึงเป็นตัวกำหนดประเภท เลือกไฟล์แล้วหน้าจอเลือกประเภทให้ตามชื่อ (backend ตรวจซ้ำ)
+  static const String wrongNameText =
+      'ชื่อไฟล์ต้องเป็น coopG.dat (ข้าราชการ) หรือ coopE.dat (ลูกจ้างประจำ)';
+  static const String fileNameHint =
+      'ชื่อไฟล์: coopG.dat = ข้าราชการ, coopE.dat = ลูกจ้างประจำ';
+
+  /// ประเภทจากชื่อไฟล์ (ตัดพาธออกก่อน) — ไม่เข้ารูปแบบ = null
+  static String? typeOfFileName(String name) {
+    final base = name.split(RegExp(r'[\\/]')).last.trim();
+    final m = RegExp(r'^coop([GE])\.([dD][aA][tT])$').firstMatch(base);
+    return m?.group(1);
+  }
+
+  /// เปลี่ยนประเภทหลังเลือกไฟล์ของอีกประเภทแล้ว: ไฟล์เดิมถูกยกเลิก ต้องเลือกไฟล์ของประเภทใหม่
+  static String fileTypeChangedText(String type) =>
+      'เปลี่ยนเป็น${EmpType.nameOf(type)}แล้ว ไฟล์ที่เลือกไว้เป็นของอีกประเภท '
+      'กรุณาเลือกไฟล์ coop$type.dat';
   static const String needCheckText = 'กรุณากดตรวจไฟล์ก่อนนำเข้า';
   static const String noProblemText =
       'ไม่พบรายการที่มีปัญหา จับคู่กับบุคลากรได้ครบ';
@@ -234,15 +257,17 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
       return;
     }
     if (f == null || !mounted) return;
-    final name = f.name.toLowerCase();
-    final String? problem = !(name.endsWith('.txt') || name.endsWith('.dat'))
-        ? SahaImportScreen.wrongTypeText
+    final fileType = SahaImportScreen.typeOfFileName(f.name);
+    final String? problem = fileType == null
+        ? SahaImportScreen.wrongNameText
         : f.size > SahaImportScreen.maxBytes
         ? SahaImportScreen.tooBigText
         : (f.size == 0 ? 'ไฟล์ว่าง ไม่มีข้อมูลให้นำเข้า' : null);
     setState(() {
       _error = problem;
       _file = problem == null ? f : null;
+      // ประเภทตามชื่อไฟล์
+      if (problem == null && fileType != null) _type = fileType;
       _check = null;
       _imported = null;
     });
@@ -397,11 +422,27 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
     children: [
       FactRow('จำนวนแถวในไฟล์', '${countText(r['rows'])} แถว'),
       FactRow('ยอดรวม', '${moneyText(r['total_amount'])} บาท'),
+      // ลำดับการหาเลขบัตร: คู่ที่จดไว้ → ประวัติงวดก่อน → รายชื่อบุคลากร → รายการหนี้ของงวด (ดู SahaService ของ backend)
       FactRow(
         'จับคู่ได้จากที่เคยจดไว้',
         '${countText(r['matched_by_mapping'])} คน',
       ),
-      FactRow('จับคู่ได้จากชื่อ', '${countText(r['matched_by_name'])} คน'),
+      FactRow(
+        'จากข้อมูลสหกรณ์งวดก่อน',
+        '${countText(r['matched_by_history'] ?? 0)} คน',
+      ),
+      FactRow(
+        'จากรายชื่อบุคลากร (ชื่อ-สกุล)',
+        '${countText(r['matched_by_name'])} คน',
+      ),
+      FactRow(
+        'จากรายการหนี้ของงวด (ชื่อ-สกุล)',
+        '${countText(r['matched_by_debt'] ?? 0)} คน',
+      ),
+      FactRow(
+        'จากชื่อใกล้เคียง (ตรวจทานในรายการปัญหา)',
+        '${countText(r['matched_by_similar'] ?? 0)} คน',
+      ),
       FactRow(
         'ข้อมูลเดิมของงวดและประเภทนี้',
         '${countText(r['existing_rows'])} รายการ',
@@ -479,7 +520,8 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                         'บรรทัด ${p['line'] ?? '-'} · สมาชิก ${p['saha_id'] ?? '-'} · '
                         '${p['name'] ?? ''} · ${moneyText(p['total_amount'])} บาท'
                         '${kind.key == 'MULTIPLE_MATCH' ? ' · พบ ${countText(p['candidates'])} คน' : ''}'
-                        '${kind.key == 'OTHER_TYPE_MAPPING' && p['mapped_type'] != null ? ' · เคยจับคู่เป็น${EmpType.nameOf('${p['mapped_type']}')}' : ''}',
+                        '${kind.key == 'OTHER_TYPE_MAPPING' && p['mapped_type'] != null ? ' · เคยจับคู่เป็น${EmpType.nameOf('${p['mapped_type']}')}' : ''}'
+                        '${kind.key == 'FUZZY_MATCH' && p['matched_name'] != null ? ' · จับคู่กับ ${p['matched_name']}' : ''}',
                         style: screenText(size: 13.5),
                       ),
                     ),
@@ -694,6 +736,18 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                               _type = t.key;
                               // เปลี่ยนประเภท: ผลตรวจเดิมใช้ไม่ได้แล้ว
                               _check = null;
+                              // ไฟล์ที่เลือกไว้เป็นของอีกประเภท (ตามชื่อไฟล์): ยกเลิกไฟล์ ให้เลือกไฟล์ของประเภทนี้
+                              final picked = _file;
+                              if (picked != null &&
+                                  SahaImportScreen.typeOfFileName(
+                                        picked.name,
+                                      ) !=
+                                      t.key) {
+                                _file = null;
+                                _error = SahaImportScreen.fileTypeChangedText(
+                                  t.key,
+                                );
+                              }
                             }),
                     ),
                 ],
@@ -722,6 +776,11 @@ class _SahaImportScreenState extends State<SahaImportScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                SahaImportScreen.fileNameHint,
+                style: screenText(size: 13, color: AppTheme.textSecondary),
               ),
             ],
           ),

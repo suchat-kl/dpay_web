@@ -469,6 +469,9 @@ void main() {
         await download(tester, BankReportScreen.runKey('AIA'));
         expect(backend.calls, ['GET /api/reports/bank/AIA']);
         expect(saver.files.single.fileName, 'rep-072568-AIA.xlsx');
+        // ไฟล์/รายงานเป็นงานยาว: บนเว็บ connectTimeout คือเวลารอ backend จนได้คำตอบ ต้องไม่ใช่ 30 วินาทีตั้งต้น
+        // (15 ต.ค. 2569 ธอส. ขึ้น "หมดเวลาในการเชื่อมต่อ")
+        expect(backend.connectTimeouts.single, const Duration(minutes: 15));
         expect(find.byKey(BankReportScreen.mismatchKey), findsNothing);
 
         await download(tester, BankReportScreen.runKey('GHB'));

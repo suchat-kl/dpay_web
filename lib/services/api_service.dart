@@ -86,7 +86,22 @@ class ApiService {
     }
 
     dio.interceptors.add(AuthInterceptor(this));
+    // งานยาว: บนเว็บ Dio นับ connectTimeout ตั้งแต่ส่งจนได้ header ของคำตอบ (รวมเวลาที่ backend ประมวลผล)
+    // ตั้งแค่ receiveTimeout จึงยังถูกตัดที่ 30 วินาที — ให้รอได้เท่ากับที่ผู้เรียกขอ
+    // (15 ต.ค. 2569 รายงานส่งธนาคาร ธอส. ขึ้น "หมดเวลาในการเชื่อมต่อ")
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final wait = options.extra[_longWaitKey];
+          if (wait is Duration) options.connectTimeout = wait;
+          handler.next(options);
+        },
+      ),
+    );
   }
+
+  /// ช่อง extra ของคำขอที่บอกว่าเป็นงานยาว (ค่าเป็น Duration)
+  static const String _longWaitKey = 'dpay_long_wait';
 
   static BaseOptions _baseOptions() => BaseOptions(
     baseUrl: baseUrl,
@@ -761,6 +776,7 @@ class ApiService {
         options: Options(
           method: method,
           receiveTimeout: receiveTimeout,
+          extra: {_longWaitKey: ?receiveTimeout},
           // ไฟล์ต้องรับเป็นไบต์ตรง ๆ ห้ามแปลงเป็นข้อความ (ไฟล์ TIS-620 / PDF / xlsx / zip)
           responseType: bytes ? ResponseType.bytes : null,
           // 502 (DPIS_ERROR, SLIP_API_ERROR) และ 503 (SLIP_API_NOT_CONFIGURED) มี code/ข้อความของ backend

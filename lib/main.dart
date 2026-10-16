@@ -6,7 +6,6 @@ import 'package:universal_html/html.dart' as html;
 import 'package:dpay/providers/settings_provider.dart';
 import 'package:dpay/screens/home_screen.dart';
 import 'package:dpay/widgets/header.dart';
-import 'package:dpay/widgets/test_phase_banner.dart';
 import 'package:dpay/widgets/change_password_dialog.dart';
 import 'package:dpay/services/api_service.dart';
 import 'package:dpay/widgets/sidebar_menu.dart';
@@ -111,14 +110,7 @@ class _DpayAppState extends State<DpayApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: AppTheme.lightTheme,
-      // ป้ายช่วงทดสอบ อยู่เหนือทุกหน้าจอ (รวมหน้าที่เปิดจากเมนูและ dialog เต็มจอ)
-      // เปิดใช้จริงแล้วให้เอา TestPhaseBanner ออก
-      builder: (context, child) => Column(
-        children: [
-          const TestPhaseBanner(),
-          Expanded(child: child ?? const SizedBox.shrink()),
-        ],
-      ),
+      // เปิดใช้จริงแล้ว (16 ต.ค. 2569): เอาป้าย "ระบบงานอยู่ในช่วงทดสอบ" (TestPhaseBanner) ออก
       home: MainNavigation(authProvider: widget.authProvider),
     );
   }

@@ -93,7 +93,8 @@ void main() {
 
         expect(AppConfig.systemName, 'ระบบหักหนี้');
         expect(AppConfig.organizationName, 'กรมทางหลวง');
-        expect(find.text(TestPhaseBanner.message), findsOneWidget);
+        // เปิดใช้จริงแล้ว ไม่มีป้ายช่วงทดสอบ
+        expect(find.text(TestPhaseBanner.message), findsNothing);
         // แถบบน + ส่วนท้าย (ไม่มีส่วนหัวภาพขนาดใหญ่ในหน้าแรกแล้ว)
         expect(find.text(AppConfig.systemName), findsNWidgets(2));
         expect(find.byType(Image), findsNothing);

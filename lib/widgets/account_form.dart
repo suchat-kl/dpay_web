@@ -201,6 +201,10 @@ class AccountDialogShell extends StatelessWidget {
 
   /// แสดงปุ่มกากบาทปิดที่มุมหัว (null = ไม่มีปุ่ม)
   final VoidCallback? onClose;
+  final Key? closeKey;
+
+  /// ความกว้างสูงสุดของหน้าต่างบนจอกว้าง (ตารางกว้างส่งค่ามากขึ้นได้)
+  final double maxWidth;
 
   const AccountDialogShell({
     super.key,
@@ -209,6 +213,8 @@ class AccountDialogShell extends StatelessWidget {
     required this.subtitle,
     required this.child,
     this.onClose,
+    this.closeKey,
+    this.maxWidth = 650,
   });
 
   @override
@@ -220,8 +226,8 @@ class AccountDialogShell extends StatelessWidget {
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.all(isDesktop ? 40 : 16),
       child: Container(
-        width: isDesktop ? 600 : screenWidth * 0.95,
-        constraints: const BoxConstraints(maxWidth: 650),
+        width: isDesktop ? maxWidth - 50 : screenWidth * 0.95,
+        constraints: BoxConstraints(maxWidth: maxWidth),
         // ตัดเนื้อหาตามมุมโค้งของหน้าต่าง กันส่วนที่เลื่อนโผล่ทับแถบหัว
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
@@ -300,6 +306,7 @@ class AccountDialogShell extends StatelessWidget {
                   ),
                   if (onClose != null)
                     IconButton(
+                      key: closeKey,
                       tooltip: 'ปิด',
                       icon: const Icon(Icons.close, color: Colors.white),
                       onPressed: onClose,

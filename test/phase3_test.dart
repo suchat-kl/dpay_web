@@ -25,6 +25,7 @@ import 'package:dpay/utils/file_download.dart';
 import 'package:dpay/utils/file_pick.dart';
 import 'package:dpay/utils/permission.dart';
 import 'package:dpay/widgets/debt_dialogs.dart';
+import 'package:dpay/widgets/loan_editor.dart';
 import 'package:dpay/widgets/period_progress.dart';
 import 'package:dpay/widgets/person_finder.dart';
 import 'package:dpay/widgets/screen_parts.dart';
@@ -420,6 +421,92 @@ void main() {
         expect(saver.files.last.bytes, [0xA1, 13, 10]);
         await download(tester, LoanCheckScreen.missingFileKey);
         expect(saver.files.last.fileName, 'Acc-2568-07.txt');
+      },
+    );
+
+    testWidgets(
+      'กดรายชื่อที่ยอดไม่ตรง: เปิดหน้าต่างแก้เลขบัญชีทับหน้านี้ เห็นยอดเทียบหนี้เดือน บันทึกแล้วปิด = ตรวจยอดใหม่',
+      (tester) async {
+        await pump(tester, LoanCheckScreen(apiService: api));
+        expect(find.text(LoanCheckScreen.rowHint), findsWidgets);
+        backend.clearLog();
+        await tapKey(tester, LoanCheckScreen.mismatchRowKey('GHB', 0));
+        expect(find.byType(LoanEditorDialog), findsOneWidget);
+        expect(backend.bodyOf('POST /api/loans/find'), {
+          'idcard': fakeIdCard(1),
+        });
+        // เทียบเฉพาะบัญชีของ ธอส. (ออมสิน 1,200.75 ของคนเดียวกันไม่นับ)
+        final target = find.byKey(
+          LoanEditor.targetKey(LoanCheckScreen.bankNames['GHB']!),
+        );
+        expect(
+          find.descendant(
+            of: target,
+            matching: find.textContaining('เกิน 3,499.50'),
+          ),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.widgetWithText(TextFormField, '5000.00'),
+          '1500.50',
+        );
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: target,
+            matching: find.textContaining('ตรงกันแล้ว'),
+          ),
+          findsOneWidget,
+        );
+
+        // ปิดทั้งที่ยังไม่บันทึก: ถามก่อน กดยกเลิก = หน้าต่างยังอยู่
+        await tester.tap(find.byKey(LoanEditorDialog.closeKey));
+        await tester.pumpAndSettle();
+        expect(find.text(LoanEditor.discardQuestion), findsOneWidget);
+        await tester.tap(find.text('ยกเลิก'));
+        await tester.pumpAndSettle();
+        expect(find.byType(LoanEditorDialog), findsOneWidget);
+
+        backend.clearLog();
+        await tapKey(tester, LoanEditor.saveKey);
+        expect(backend.calls.first, 'PUT /api/loans/set');
+        final items = backend.bodyOf('PUT /api/loans/set')!['items'] as List;
+        expect(items.firstWhere((e) => e['flg'] == '1')['amt'], '1500.50');
+        await settleSnackBar(tester);
+
+        // บันทึกแล้วไม่มีอะไรค้าง ปิดได้เลย แล้วหน้าตรวจยอดโหลดใหม่
+        backend.clearLog();
+        await tester.tap(find.byKey(LoanEditorDialog.closeKey));
+        await tester.pumpAndSettle();
+        expect(find.byType(LoanEditorDialog), findsNothing);
+        expect(backend.calls, [
+          'GET /api/loans/check',
+          'GET /api/loans/missing-accounts',
+        ]);
+      },
+    );
+
+    testWidgets(
+      'กดรายชื่อคนที่ไม่มีเลขบัญชี: เทียบกับหนี้ของธนาคารที่ขาด ปิดโดยไม่บันทึก = ไม่ตรวจยอดใหม่',
+      (tester) async {
+        await pump(tester, LoanCheckScreen(apiService: api));
+        await tapKey(tester, LoanCheckScreen.missingRowKey(0));
+        expect(find.byType(LoanEditorDialog), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(
+              LoanEditor.targetKey(LoanCheckScreen.bankNames['GSB']!),
+            ),
+            matching: find.textContaining('ขาด 1,000.00'),
+          ),
+          findsOneWidget,
+        );
+        backend.clearLog();
+        await tester.tap(find.byKey(LoanEditorDialog.closeKey));
+        await tester.pumpAndSettle();
+        expect(find.byType(LoanEditorDialog), findsNothing);
+        expect(backend.calls, isEmpty);
       },
     );
 

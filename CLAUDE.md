@@ -43,7 +43,7 @@ screens/     home_screen.dart, period_screen.dart, alert_message_screen.dart, ed
              chapana_slip_screen.dart (รายงานฌาปนกิจ-สลิป — เทียบยอดที่ต้องการหักกับยอดที่หักได้จริงในสลิป),
              saha_import_screen.dart (นำเข้าสหกรณ์ + SahaMappingDialog), chapana_import_screen.dart (นำเข้าฌาปนกิจ),
              div_status_screen.dart (สถานะการบันทึกของหน่วยงาน — กดแถวเปิด DebtEntryScreen(initialDiv, initialPeriod)),
-             cgd_files_screen.dart (ไฟล์ส่งกรมบัญชีกลาง), loan_check_screen.dart (ตรวจยอดเงินกู้กับหนี้เดือน),
+             cgd_files_screen.dart (ไฟล์ส่งกรมบัญชีกลาง), loan_check_screen.dart (ตรวจยอดเงินกู้กับหนี้เดือน — กดรายชื่อเปิด LoanEditorDialog ทับหน้า),
              report_screen.dart (ReportScreen รายงาน PDF, BankReportScreen รายงานส่งธนาคาร),
              master_screen.dart (ข้อมูลหลักทุกตาราง), period_jobs_screen.dart (DpisImportScreen, PreparePeriodScreen),
              debt_entry_screen.dart (บันทึกข้อมูล), deduct_screen.dart (กบข/กสจ. สหกรณ์และภาษี), loan_screen.dart (เลขที่บัญชีเงินกู้),
@@ -53,6 +53,7 @@ widgets/     header, sidebar_menu, footer, test_phase_banner, hover_lift, app_pa
              sheet_table (SheetScroll, SheetCard, SheetPinnedHeader, SheetHead, SheetButton, sheetInput — ชิ้นส่วนของตารางแก้ในแถว),
              work_parts (WorkPage, FactRow, PeriodPicker, FileDownloads, DownloadButtons — ชิ้นส่วนของงานประจำงวด), period_progress (ความคืบหน้าของงวด),
              debt_dialogs (DebtAuditDialog), person_finder,
+             loan_editor (LoanEditor ตารางเลขบัญชีเงินกู้ของหนึ่งคน ใช้ร่วมกันระหว่าง loan_screen กับ LoanEditorDialog),
              thai_date_picker (วันเดียว), thai_date_range_picker (ช่วงวันที่ แตะ/ลาก), div_selector (DivSelector, DivDropdown),
              alert_message_box, login_dialog, change_password_dialog, reset_password_dialog, user_dialog
 utils/       money.dart (Money = สตางค์, IdCard, BeDate = ddMMyyyy พ.ศ.), logger.dart (AppLogger), util.dart (วันที่ไทย), dialog.dart (AppDialog), snackbar_helper.dart,

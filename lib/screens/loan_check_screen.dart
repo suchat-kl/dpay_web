@@ -8,6 +8,7 @@ import '../services/work_api.dart';
 import '../utils/dialog.dart';
 import '../utils/money.dart';
 import '../utils/snackbar_helper.dart';
+import '../widgets/loan_editor.dart';
 import '../widgets/screen_parts.dart';
 import '../widgets/sheet_table.dart';
 import '../widgets/work_parts.dart';
@@ -19,6 +20,8 @@ import '../widgets/work_parts.dart';
 /// - "ปรับปรุงหนี้ธนาคาร" (`POST /api/loans/sync-amounts` งวดปัจจุบันเท่านั้น ถามยืนยันก่อน):
 ///   ตั้งยอดของคนที่มีบัญชีเดียวให้เท่าหนี้เดือน คนที่มีหลายบัญชีต้องแก้เองที่หน้าเลขที่บัญชีเงินกู้
 /// - ดาวน์โหลดไฟล์หนี้ที่ต้องแก้ไข (`mismatch-file`) และรายชื่อบุคคลที่ไม่มีเลขบัญชี (`missing-accounts` + ไฟล์)
+/// - กดที่รายชื่อ (ทั้งคนที่ยอดไม่ตรงและคนที่ไม่มีเลขบัญชี) เปิดหน้าต่างแก้เลขที่บัญชีเงินกู้ของคนนั้นทับหน้านี้
+///   ([LoanEditorDialog] พร้อมยอดหนี้เดือนที่ต้องเทียบ) บันทึกแล้วปิดหน้าต่าง = ตรวจยอดใหม่
 class LoanCheckScreen extends StatefulWidget {
   final ApiService apiService;
 
@@ -46,11 +49,33 @@ class LoanCheckScreen extends StatefulWidget {
   static const Key syncResultKey = ValueKey('loan-sync-result');
   static Key bankKey(String bank) => ValueKey('loan-check-$bank');
 
+  /// แถวลำดับที่ [index] (นับจาก 0) ในตารางยอดไม่ตรงของธนาคาร [bank] / ในตารางคนที่ไม่มีเลขบัญชี
+  static Key mismatchRowKey(String bank, int index) =>
+      ValueKey('loan-check-$bank-$index');
+  static Key missingRowKey(int index) => ValueKey('loan-missing-$index');
+
   static const Map<String, String> bankNames = {
     'GHB': 'ธ.อาคารสงเคราะห์ (40302)',
     'GSB': 'ธ.ออมสิน (40303)',
     'KTB': 'ธ.กรุงไทย (40315)',
   };
+
+  /// โครงการ (flg) ของเลขบัญชีที่นับเป็นของแต่ละธนาคาร (ตรงกับ backend `LoanCheckService.BANKS`)
+  static const Map<String, List<String>> bankFlags = {
+    'GHB': ['1', '2', '3'],
+    'GSB': ['5'],
+    'KTB': ['6'],
+  };
+
+  /// ช่องหนี้รายเดือนของแต่ละธนาคารในรายการคนที่ไม่มีเลขบัญชี
+  static const Map<String, String> bankDebtFields = {
+    'GHB': 'c40302',
+    'GSB': 'c40303',
+    'KTB': 'c40315',
+  };
+
+  static const String rowHint =
+      'กดที่รายชื่อเพื่อแก้เลขที่บัญชีเงินกู้ของคนนั้นได้ทันที';
 
   static const String okText = 'ยอดเลขบัญชีเงินกู้ตรงกับหนี้รายเดือนทุกธนาคาร';
   static const String syncLabel = 'ปรับปรุงหนี้ธนาคาร';
@@ -148,6 +173,64 @@ class _LoanCheckScreenState extends State<LoanCheckScreen>
     }
   }
 
+  LoanTarget _target(String bank, Object? debt) => LoanTarget(
+    bankName: LoanCheckScreen.bankNames[bank] ?? bank,
+    flags: LoanCheckScreen.bankFlags[bank] ?? const [],
+    debt: Money.fromJson(debt),
+  );
+
+  /// เปิดหน้าต่างแก้เลขที่บัญชีเงินกู้ทับหน้านี้ บันทึกแล้วตรวจยอดใหม่
+  Future<void> _edit(Map<String, dynamic> m, List<LoanTarget> targets) async {
+    if (_busy) return;
+    final saved = await LoanEditorDialog.show(
+      context,
+      apiService: widget.apiService,
+      idcard: '${m['idcard'] ?? ''}',
+      name: _name(m),
+      targets: targets,
+    );
+    if (saved && mounted) await _load();
+  }
+
+  /// แถวที่กดได้: เน้นสีตอนชี้ และมีไอคอนแก้ไขท้ายแถว
+  Widget _tapRow(Key key, VoidCallback onTap, List<Widget> cells) => InkWell(
+    key: key,
+    onTap: _busy ? null : onTap,
+    hoverColor: AppTheme.primaryColor.withValues(alpha: 0.06),
+    child: Row(
+      children: [
+        ...cells,
+        SizedBox(
+          width: 36,
+          child: Tooltip(
+            message: 'แก้เลขที่บัญชีเงินกู้',
+            child: Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _hint() => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Icon(Icons.touch_app_outlined, size: 16, color: AppTheme.textSecondary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            LoanCheckScreen.rowHint,
+            style: screenText(size: 13, color: AppTheme.textSecondary),
+          ),
+        ),
+      ],
+    ),
+  );
+
   String _name(Map<String, dynamic> m) =>
       '${m['title'] ?? ''}${m['name'] ?? ''} ${m['surname'] ?? ''}'.trim();
 
@@ -178,35 +261,50 @@ class _LoanCheckScreenState extends State<LoanCheckScreen>
     ),
   );
 
-  Widget _mismatchTable(List<Map<String, dynamic>> rows) => SheetScroll(
-    minWidth: 640,
-    child: SheetCard(
-      header: const Row(
-        children: [
-          Expanded(flex: 7, child: SheetHead('ชื่อ-สกุล')),
-          Expanded(flex: 2, child: SheetHead('บัญชี', align: TextAlign.right)),
-          Expanded(
-            flex: 3,
-            child: SheetHead('หนี้เดือน', align: TextAlign.right),
-          ),
-          Expanded(
-            flex: 3,
-            child: SheetHead('ยอดเลขบัญชี', align: TextAlign.right),
-          ),
-        ],
-      ),
-      rows: [
-        for (final m in rows)
-          Row(
+  Widget _mismatchTable(String bank, List<Map<String, dynamic>> rows) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _hint(),
+      SheetScroll(
+        minWidth: 680,
+        child: SheetCard(
+          header: const Row(
             children: [
-              Expanded(flex: 7, child: _personCell(m)),
-              _num(countText(m['accounts']), flex: 2),
-              _num(moneyText(m['debt'])),
-              _num(moneyText(m['loan_total']), color: AppTheme.dangerColor),
+              Expanded(flex: 7, child: SheetHead('ชื่อ-สกุล')),
+              Expanded(
+                flex: 2,
+                child: SheetHead('บัญชี', align: TextAlign.right),
+              ),
+              Expanded(
+                flex: 3,
+                child: SheetHead('หนี้เดือน', align: TextAlign.right),
+              ),
+              Expanded(
+                flex: 3,
+                child: SheetHead('ยอดเลขบัญชี', align: TextAlign.right),
+              ),
+              SizedBox(width: 36),
             ],
           ),
-      ],
-    ),
+          rows: [
+            for (var i = 0; i < rows.length; i++)
+              _tapRow(
+                LoanCheckScreen.mismatchRowKey(bank, i),
+                () => _edit(rows[i], [_target(bank, rows[i]['debt'])]),
+                [
+                  Expanded(flex: 7, child: _personCell(rows[i])),
+                  _num(countText(rows[i]['accounts']), flex: 2),
+                  _num(moneyText(rows[i]['debt'])),
+                  _num(
+                    moneyText(rows[i]['loan_total']),
+                    color: AppTheme.dangerColor,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    ],
   );
 
   Widget _bankCard(Map<String, dynamic> b) {
@@ -228,7 +326,7 @@ class _LoanCheckScreenState extends State<LoanCheckScreen>
               'ไม่มีรายการที่ต้องแก้',
               style: screenText(size: 14, color: AppTheme.textSecondary),
             )
-          : _mismatchTable(_maps(b['mismatches'])),
+          : _mismatchTable(bank, _maps(b['mismatches'])),
     );
   }
 
@@ -325,8 +423,9 @@ class _LoanCheckScreenState extends State<LoanCheckScreen>
             style: screenText(size: 14, color: AppTheme.textSecondary),
           )
         else ...[
+          _hint(),
           SheetScroll(
-            minWidth: 720,
+            minWidth: 760,
             child: SheetCard(
               header: const Row(
                 children: [
@@ -344,12 +443,22 @@ class _LoanCheckScreenState extends State<LoanCheckScreen>
                     child: SheetHead('กรุงไทย', align: TextAlign.right),
                   ),
                   Expanded(flex: 3, child: SheetHead('ขาดบัญชีของ')),
+                  SizedBox(width: 36),
                 ],
               ),
               rows: [
-                for (final m in _missing)
-                  Row(
-                    children: [
+                for (final (i, m) in _missing.indexed)
+                  _tapRow(
+                    LoanCheckScreen.missingRowKey(i),
+                    () => _edit(m, [
+                      for (final bank
+                          in m['missing_banks'] as List? ?? const [])
+                        _target(
+                          '$bank',
+                          m[LoanCheckScreen.bankDebtFields['$bank']],
+                        ),
+                    ]),
+                    [
                       Expanded(flex: 7, child: _personCell(m)),
                       _num(moneyText(m['c40302'])),
                       _num(moneyText(m['c40303'])),

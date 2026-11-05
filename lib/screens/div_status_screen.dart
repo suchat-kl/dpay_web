@@ -14,15 +14,15 @@ import '../widgets/work_parts.dart';
 import 'debt_entry_screen.dart';
 import 'period_jobs_screen.dart';
 
-/// สถานะการบันทึกของหน่วยงาน (ACCOUNT) — ใช้ตามหน่วยงานที่ยังไม่บันทึกหนี้ของงวด
+/// สถานะการบันทึกของหน่วยงาน (ACCOUNT) — ใช้ตามหน่วยงานที่ยังใช้ยอดเดือนก่อน (ยังไม่แก้ยอดในงวดนี้)
 ///
 /// `GET /api/debts/div-status?month=&year=` → สรุป (`summary`) + รายหน่วยงาน (`items`)
 /// - การ์ดสรุปพร้อมแถบความคืบหน้า ตัวกรองสถานะ / ส่วนกลาง-ภูมิภาค / ค้นรหัสหรือชื่อ
 /// - ตารางเรียงตามลำดับหน่วยงาน กดหัวคอลัมน์เรียงได้ แบ่งหน้าฝั่งหน้าเว็บ (5/10/15/20)
 ///   กดแถวไปหน้า "บันทึกข้อมูล" ของหน่วยงานและงวดนั้น
-/// - "คัดลอกรายชื่อหน่วยงานที่ยังไม่บันทึก" (รหัส + ชื่อ ลงคลิปบอร์ด — ไม่มีข้อมูลบุคคล)
+/// - "คัดลอกรายชื่อหน่วยงานที่ใช้ยอดเดือนก่อน" (รหัส + ชื่อ ลงคลิปบอร์ด — ไม่มีข้อมูลบุคคล)
 /// - `audit_available` เท็จ (งวดก่อนมีระบบใหม่ ไม่มีประวัติการแก้ไข): แจ้งว่าบอกสถานะไม่ได้
-///   และ**ไม่แสดงป้าย "ยังไม่บันทึก"** ให้เข้าใจผิด
+///   และ**ไม่แสดงป้าย "ใช้ยอดเดือนก่อน"** ให้เข้าใจผิด
 /// - `period_ready` เท็จ: แถบแจ้งพร้อมปุ่มไปหน้าเตรียมงวด · รายการ `div` ว่าง = "ไม่ระบุหน่วยงาน" (กดไม่ได้)
 ///   `div_order` เป็นข้อความ/null (null เรียงต่อท้าย) · งวดไม่มีรายการ = ตารางว่าง สรุปเป็นศูนย์
 /// - backend ยังไม่มีเส้นนี้ (404): แสดงข้อความว่ายังใช้ไม่ได้ ไม่พัง
@@ -50,8 +50,10 @@ class DivStatusScreen extends StatefulWidget {
       ValueKey('div-status-region-$value');
 
   static const String editedLabel = 'บันทึกแล้ว';
-  static const String notEditedLabel = 'ยังไม่บันทึก';
-  static const String copyLabel = 'คัดลอกรายชื่อหน่วยงานที่ยังไม่บันทึก';
+
+  /// ยังไม่แก้ยอดในงวดนี้ = ยอดที่ยกมาจากเดือนก่อนตอนเตรียมงวด
+  static const String notEditedLabel = 'ใช้ยอดเดือนก่อน';
+  static const String copyLabel = 'คัดลอกรายชื่อหน่วยงานที่ใช้ยอดเดือนก่อน';
   static const String noAuditText =
       'งวดนี้ไม่มีประวัติการแก้ไขในระบบใหม่ จึงบอกไม่ได้ว่าหน่วยงานใดบันทึกแล้ว';
   static const String unavailableText =
@@ -60,7 +62,7 @@ class DivStatusScreen extends StatefulWidget {
   static const String noRowsText = 'งวดนี้ไม่มีรายการหนี้';
   static const String noDivName = 'ไม่ระบุหน่วยงาน';
   static const String criteriaText =
-      'ยังไม่บันทึก หมายถึงยังไม่มีการแก้ยอดในงวดนี้ รวมหน่วยงานที่ไม่มีรายการต้องแก้';
+      'ใช้ยอดเดือนก่อน หมายถึงยังไม่มีการแก้ยอดในงวดนี้ ยอดหนี้เป็นยอดที่ยกมาจากเดือนก่อน รวมหน่วยงานที่ไม่มีรายการต้องแก้';
   static const String notReadyText =
       'การเตรียมข้อมูลงวดยังไม่เสร็จหรือไม่สำเร็จ รายการที่เห็นอาจไม่ครบ และหน่วยงานยังแก้ยอดไม่ได้จนกว่าจะเตรียมงวดใหม่สำเร็จ';
   static const String goPrepareLabel = 'ไปหน้าเตรียมข้อมูลงวด';
@@ -231,7 +233,7 @@ class _DivStatusScreenState extends State<DivStatusScreen> {
     await Clipboard.setData(
       ClipboardData(
         text:
-            'หน่วยงานที่ยังไม่บันทึกหนี้ งวด $label (${rows.length} หน่วยงาน)\n'
+            'หน่วยงานที่ใช้ยอดเดือนก่อน งวด $label (${rows.length} หน่วยงาน)\n'
             '${rows.map((r) => '${r['div']} ${r['divname'] ?? ''}'.trim()).join('\n')}',
       ),
     );
@@ -438,12 +440,13 @@ class _DivStatusScreenState extends State<DivStatusScreen> {
           _cell(countText(r['e']), right: true),
           _cell(countText(r['rows_with_debt']), right: true),
           Expanded(
-            flex: 3,
+            // ป้าย "ใช้ยอดเดือนก่อน" ต้องอยู่บรรทัดเดียวที่ความกว้างตารางต่ำสุด
+            flex: 4,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Align(
                 alignment: Alignment.centerLeft,
-                // ไม่มีประวัติการแก้ไข: ไม่บอกสถานะ (ไม่ขึ้น "ยังไม่บันทึก" ให้เข้าใจผิด)
+                // ไม่มีประวัติการแก้ไข: ไม่บอกสถานะ (ไม่ขึ้น "ใช้ยอดเดือนก่อน" ให้เข้าใจผิด)
                 child: !_audit
                     ? Text(
                         '-',
@@ -499,7 +502,7 @@ class _DivStatusScreenState extends State<DivStatusScreen> {
                 _head('ข้าราชการ', 'g', right: true),
                 _head('ลูกจ้างประจำ', 'e', right: true),
                 _head('มียอดหนี้', 'rows_with_debt', right: true),
-                _head('สถานะ', 'edited', flex: 3),
+                _head('สถานะ', 'edited', flex: 4),
                 _head('แก้ (ครั้ง)', 'edits', right: true),
                 _head('แก้ล่าสุดเมื่อ', 'last_edit_at', flex: 5),
                 _head('โดยบัญชี', 'last_edit_by'),
@@ -536,7 +539,7 @@ class _DivStatusScreenState extends State<DivStatusScreen> {
           icon: DivStatusScreen.menuIcon,
           title: DivStatusScreen.menuTitle,
           subtitle:
-              'ดูว่าหน่วยงานใดบันทึกหนี้ของงวดแล้ว เพื่อตามหน่วยงานที่ยังไม่บันทึก',
+              'ดูว่าหน่วยงานใดบันทึกหนี้ของงวดแล้ว เพื่อตามหน่วยงานที่ยังใช้ยอดเดือนก่อน',
           bullets: [
             '"บันทึกแล้ว" = มีการแก้ยอดหนี้ของหน่วยงานนั้นในงวดอย่างน้อยหนึ่งครั้ง (เกณฑ์เดียว ไม่มีการกดยืนยันว่าตรวจแล้ว)',
             'กดที่แถวเพื่อไปหน้าบันทึกข้อมูลของหน่วยงานนั้น',

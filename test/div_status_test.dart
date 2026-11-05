@@ -145,7 +145,7 @@ void main() {
         findsOneWidget,
       );
 
-      // เกณฑ์ของ "ยังไม่บันทึก" อธิบายไว้ใต้การ์ดสรุป (ไม่มีปุ่มยืนยันว่าตรวจแล้ว)
+      // เกณฑ์ของ "ใช้ยอดเดือนก่อน" อธิบายไว้ใต้การ์ดสรุป (ไม่มีปุ่มยืนยันว่าตรวจแล้ว)
       expect(
         find.descendant(
           of: summary,
@@ -217,7 +217,7 @@ void main() {
       expect(find.text('แสดง 28 จาก 30 หน่วยงาน'), findsOneWidget);
       expect(row('901'), findsNothing);
 
-      // ส่วนกลาง 5 หน่วยงาน (902-905, 909) ที่ยังไม่บันทึก = 4
+      // ส่วนกลาง 5 หน่วยงาน (902-905, 909) ที่ใช้ยอดเดือนก่อน = 4
       await tapKey(tester, DivStatusScreen.regionFilterKey('center'));
       expect(rowCount(tester), 4);
       expect(row('903'), findsNothing);
@@ -314,47 +314,48 @@ void main() {
     expect(find.byKey(DebtEntryScreen.pastNoticeKey), findsOneWidget);
   });
 
-  testWidgets('คัดลอกรายชื่อหน่วยงานที่ยังไม่บันทึก: รหัส + ชื่อ ลงคลิปบอร์ด', (
-    tester,
-  ) async {
-    edit('901');
-    await pump(tester);
-    await tapKey(tester, DivStatusScreen.copyKey);
-    expect(copied, hasLength(1));
-    final lines = copied.single.split('\n');
-    expect(
-      lines.first,
-      'หน่วยงานที่ยังไม่บันทึกหนี้ งวด กรกฎาคม 2568 (29 หน่วยงาน)',
-    );
-    expect(lines, hasLength(30));
-    expect(lines[1], '902 กองบัญชีตัวอย่าง');
-    expect(lines.any((l) => l.startsWith('901 ')), isFalse);
-    expect(find.text('คัดลอกแล้ว 29 หน่วยงาน'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'คัดลอกรายชื่อหน่วยงานที่ใช้ยอดเดือนก่อน: รหัส + ชื่อ ลงคลิปบอร์ด',
+    (tester) async {
+      edit('901');
+      await pump(tester);
+      await tapKey(tester, DivStatusScreen.copyKey);
+      expect(copied, hasLength(1));
+      final lines = copied.single.split('\n');
+      expect(
+        lines.first,
+        'หน่วยงานที่ใช้ยอดเดือนก่อน งวด กรกฎาคม 2568 (29 หน่วยงาน)',
+      );
+      expect(lines, hasLength(30));
+      expect(lines[1], '902 กองบัญชีตัวอย่าง');
+      expect(lines.any((l) => l.startsWith('901 ')), isFalse);
+      expect(find.text('คัดลอกแล้ว 29 หน่วยงาน'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
 
-    // ทุกหน่วยงานบันทึกแล้ว: ไม่มีอะไรให้คัดลอก
-    for (var d = 902; d <= 930; d++) {
-      edit('$d');
-    }
-    await tapKey(tester, DivStatusScreen.refreshKey);
-    await tapKey(tester, DivStatusScreen.copyKey);
-    expect(copied, hasLength(1));
-    expect(find.text(DivStatusScreen.allDoneText), findsOneWidget);
-    expect(
-      tester
-          .widget<LinearProgressIndicator>(
-            find.byKey(DivStatusScreen.progressKey),
-          )
-          .value,
-      1,
-    );
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-  });
+      // ทุกหน่วยงานบันทึกแล้ว: ไม่มีอะไรให้คัดลอก
+      for (var d = 902; d <= 930; d++) {
+        edit('$d');
+      }
+      await tapKey(tester, DivStatusScreen.refreshKey);
+      await tapKey(tester, DivStatusScreen.copyKey);
+      expect(copied, hasLength(1));
+      expect(find.text(DivStatusScreen.allDoneText), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(DivStatusScreen.progressKey),
+            )
+            .value,
+        1,
+      );
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets(
-    'audit_available เท็จ: แจ้งว่าบอกสถานะไม่ได้ ไม่มีป้าย "ยังไม่บันทึก" ไม่มีตัวกรองสถานะ/ปุ่มคัดลอก',
+    'audit_available เท็จ: แจ้งว่าบอกสถานะไม่ได้ ไม่มีป้าย "ใช้ยอดเดือนก่อน" ไม่มีตัวกรองสถานะ/ปุ่มคัดลอก',
     (tester) async {
       backend.p3.auditAvailable = false;
       await pump(tester);

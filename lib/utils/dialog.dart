@@ -166,6 +166,9 @@ class AppDialog {
     String message, {
     String confirmText = 'ยืนยัน',
     String cancelText = 'ยกเลิก',
+    String title = 'ยืนยันการดำเนินการ',
+    IconData icon = Icons.question_mark,
+    Color? iconColor,
   }) {
     return showDialog<bool>(
       context: context,
@@ -191,6 +194,13 @@ class AppDialog {
                   message: message,
                   confirmText: confirmText,
                   cancelText: cancelText,
+                  title: title,
+                  icon: icon,
+                  iconColor: iconColor ?? AppTheme.primaryColor,
+                  // ไม่ส่งสีมา = พื้นวงไอคอนสีเดิม
+                  iconBackground:
+                      iconColor?.withValues(alpha: 0.12) ??
+                      AppTheme.primaryPale,
                 ),
               ),
             ),
@@ -291,6 +301,10 @@ class AppDialog {
     required String message,
     required String confirmText,
     required String cancelText,
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBackground,
   }) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -313,20 +327,17 @@ class AppDialog {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.primaryPale,
+              color: iconBackground,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.question_mark,
-              size: 64,
-              color: AppTheme.primaryColor,
-            ),
+            child: Icon(icon, size: 64, color: iconColor),
           ),
           const SizedBox(height: 16),
           // หัวข้อ
-          const Text(
-            'ยืนยันการดำเนินการ',
-            style: TextStyle(
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,

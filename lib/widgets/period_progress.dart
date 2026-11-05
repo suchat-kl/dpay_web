@@ -17,8 +17,10 @@ import '../screens/saha_import_screen.dart';
 import '../services/api_service.dart';
 import '../services/debt_api.dart';
 import '../services/work_api.dart';
+import '../utils/dialog.dart';
 import '../utils/permission.dart';
 import 'hover_lift.dart';
+import 'loan_gate.dart';
 import 'screen_parts.dart';
 import 'work_parts.dart';
 
@@ -35,6 +37,9 @@ enum StepState {
 
   /// ไม่มีข้อมูลสถานะ — เป็นทางลัดไปเมนูเฉย ๆ
   none,
+
+  /// ยังใช้ไม่ได้ ต้องแก้ขั้นก่อนหน้าก่อน (ข้อ 9/10 รอข้อ 8) — กดแล้วเตือนแทนการเปิดหน้า
+  locked,
 }
 
 /// ความคืบหน้าของงวด — หน้าแรก
@@ -49,6 +54,8 @@ enum StepState {
 /// แต่ละขั้นแสดงสถานะจากเส้นสรุปที่มี และกดไปเมนูนั้นได้ ขั้นที่ไม่มีเส้นสรุป (หรือโหลดสถานะไม่ได้) เป็นทางลัดเฉย ๆ
 /// เส้นที่ใช้: `/api/period/dpis-import`, `/api/period/prepare`, `/api/debts/div-status`, `/api/chapana/summary`, `/api/saha/summary`,
 /// `/api/loans/check` — แต่ละเส้นล้มได้โดยไม่กระทบขั้นอื่น
+///
+/// ข้อ 8 ยังไม่ผ่าน (ยอดไม่ตรง หรือมีคนที่ไม่มีเลขบัญชี) → ข้อ 9 และ 10 ล็อก กดแล้วเตือนให้ไปแก้ข้อ 8 ก่อน ([LoanGate])
 class PeriodProgress extends StatefulWidget {
   final ApiService apiService;
 
@@ -63,6 +70,9 @@ class PeriodProgress extends StatefulWidget {
   static const String doneLabel = 'ทำแล้ว';
   static const String todoLabel = 'ยังไม่ได้ทำ';
   static const String problemLabel = 'ต้องแก้';
+  static const String lockedDetail =
+      'ยังใช้ไม่ได้ ต้องแก้ที่ตรวจยอดเงินกู้กับหนี้เดือนให้เรียบร้อยก่อน';
+  static const String goCheckLabel = 'ไปแก้ไข';
 
   /// ขั้นหน่วยงานบันทึกหนี้ของผู้ใช้ทั่วไป
   static const String entryEditableText =
@@ -86,6 +96,9 @@ class _Step {
   /// ผู้ใช้ทั่วไปเห็นขั้นนี้ด้วย
   final bool general;
 
+  /// ข้อความเตือนเมื่อกดขั้นที่ล็อก ([StepState.locked])
+  final String lockedText;
+
   const _Step(
     this.title,
     this.icon,
@@ -93,6 +106,7 @@ class _Step {
     this.state = StepState.none,
     this.detail = '',
     this.general = false,
+    this.lockedText = '',
   });
 }
 
@@ -184,6 +198,9 @@ class _PeriodProgressState extends State<PeriodProgress> {
         prepare != null &&
         prepare['ready'] == true &&
         intOf(prepare['existing_rows']) > 0;
+    // ด่านข้อ 8: โหลดผลตรวจไม่ได้ = ไม่ล็อกที่หน้าแรก (หน้าข้อ 9/10 ตรวจเองอีกชั้น)
+    final loansPassed = loans != null && LoanGate.passed(loans);
+    final gated = loans != null && !loansPassed;
 
     return [
       _Step(
@@ -303,7 +320,7 @@ class _PeriodProgressState extends State<PeriodProgress> {
         (_) => LoanCheckScreen(apiService: api),
         state: loans == null
             ? StepState.none
-            : (loans['ok'] == true ? StepState.done : StepState.problem),
+            : (loansPassed ? StepState.done : StepState.problem),
         detail: loans == null
             ? ''
             : loans['ok'] == true
@@ -315,11 +332,21 @@ class _PeriodProgressState extends State<PeriodProgress> {
         'ไฟล์ส่งกรมบัญชีกลาง',
         CgdFilesScreen.menuIcon,
         (_) => CgdFilesScreen(apiService: api),
+        state: gated ? StepState.locked : StepState.none,
+        detail: gated ? PeriodProgress.lockedDetail : '',
+        lockedText: gated
+            ? LoanGate.message(loans, CgdFilesScreen.gateAction)
+            : '',
       ),
       _Step(
         BankReportScreen.menuTitle,
         BankReportScreen.menuIcon,
         (_) => BankReportScreen(apiService: api),
+        state: gated ? StepState.locked : StepState.none,
+        detail: gated ? PeriodProgress.lockedDetail : '',
+        lockedText: gated
+            ? LoanGate.message(loans, BankReportScreen.gateAction)
+            : '',
       ),
       // เทียบกับสลิปเรียกข้ามระบบ (ระบบสลิปภาษี) จึงไม่เรียกอัตโนมัติ — เป็นทางลัดเฉย ๆ
       _Step(
@@ -342,6 +369,7 @@ class _PeriodProgressState extends State<PeriodProgress> {
       StepState.todo => (PeriodProgress.todoLabel, AppTheme.warningColor),
       StepState.problem => (PeriodProgress.problemLabel, AppTheme.dangerColor),
       StepState.none => ('', AppTheme.neutralColor),
+      StepState.locked => (LoanGate.lockedLabel, AppTheme.dangerColor),
     };
     // ชี้เมาส์แล้วขั้นลอยขึ้นเล็กน้อยแบบเดียวกับการ์ดบนหน้าแรก
     return HoverLift(
@@ -370,9 +398,24 @@ class _PeriodProgressState extends State<PeriodProgress> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {
-          await Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: s.screen));
+          if (s.state == StepState.locked) {
+            // ขั้นที่ล็อก: เตือนแทนการเปิดหน้า เลือกไปแก้ข้อ 8 ได้เลย
+            final go = await AppDialog.showConfirm(
+              context,
+              s.lockedText,
+              confirmText: PeriodProgress.goCheckLabel,
+              cancelText: 'ปิด',
+              title: LoanGate.title,
+              icon: Icons.lock_outline,
+              iconColor: AppTheme.warningColor,
+            );
+            if (go != true || !mounted) return;
+            await LoanGate.openCheck(context, widget.apiService);
+          } else {
+            await Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: s.screen));
+          }
           // กลับมาจากหน้างาน: สถานะอาจเปลี่ยนแล้ว
           if (mounted) _load();
         },
@@ -427,9 +470,13 @@ class _PeriodProgressState extends State<PeriodProgress> {
                 ),
               ),
               Icon(
-                Icons.chevron_right,
+                s.state == StepState.locked
+                    ? Icons.lock_outline
+                    : Icons.chevron_right,
                 size: 20,
-                color: AppTheme.textSecondary,
+                color: s.state == StepState.locked
+                    ? AppTheme.dangerColor
+                    : AppTheme.textSecondary,
               ),
             ],
           ),

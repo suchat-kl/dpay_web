@@ -9,6 +9,7 @@ import '../services/work_api.dart';
 import '../utils/file_download.dart';
 import '../utils/permission.dart';
 import '../widgets/div_selector.dart';
+import '../widgets/loan_gate.dart';
 import '../widgets/screen_parts.dart';
 import '../widgets/work_parts.dart';
 import 'loan_check_screen.dart';
@@ -355,6 +356,9 @@ class _ReportScreenState extends State<ReportScreen>
 ///
 /// `GET /api/reports/bank/{bank}` — ธอส./ออมสิน/กรุงไทย ตรวจยอดเลขบัญชีเงินกู้ก่อนออก ยังไม่ตรง = 409
 /// `LOAN_AMOUNT_MISMATCH` → แสดงจำนวนที่ไม่ตรงจาก `details` พร้อมปุ่มไปหน้า "ตรวจยอดเงินกู้กับหนี้เดือน"
+///
+/// งวดปัจจุบันต้องผ่าน "ตรวจยอดเงินกู้กับหนี้เดือน" ก่อน ([LoanGate]) ไม่ผ่าน = ออกรายงานไม่ได้ทุกธนาคาร (รวม AIA)
+/// backend กันซ้ำ: 409 `LOAN_CHECK_REQUIRED` → แถบเตือนตัวเดียวกัน; `LOAN_AMOUNT_MISMATCH` เหลือใช้กับงวดย้อนหลัง
 class BankReportScreen extends StatefulWidget {
   final ApiService apiService;
 
@@ -376,6 +380,7 @@ class BankReportScreen extends StatefulWidget {
   };
 
   static const String goCheckLabel = 'ไปหน้าตรวจยอดเงินกู้';
+  static const String gateAction = 'ออกรายงานส่งธนาคาร';
 
   @override
   State<BankReportScreen> createState() => _BankReportScreenState();
@@ -389,6 +394,42 @@ class _BankReportScreenState extends State<BankReportScreen>
   String? _mismatch;
   final Map<String, String> _notes = {};
 
+  /// ข้อความของด่านข้อ 8 — null = ผ่าน (หรือเป็นงวดย้อนหลัง)
+  String? _gate;
+  bool _checking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkGate();
+  }
+
+  /// ตรวจข้อ 8 ของงวดปัจจุบัน — ตรวจไม่สำเร็จถือว่ายังไม่ผ่าน
+  Future<void> _checkGate() async {
+    if (_past != null) {
+      setState(() {
+        _gate = null;
+        _checking = false;
+      });
+      return;
+    }
+    setState(() => _checking = true);
+    String? gate;
+    try {
+      final check = await widget.apiService.getLoanCheck();
+      gate = LoanGate.passed(check)
+          ? null
+          : LoanGate.message(check, BankReportScreen.gateAction);
+    } catch (e) {
+      gate = LoanGate.failedText('$e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _gate = gate;
+      _checking = false;
+    });
+  }
+
   Future<void> _run(String bank) async {
     setState(() {
       _mismatch = null;
@@ -398,6 +439,11 @@ class _BankReportScreenState extends State<BankReportScreen>
       bank,
       () => widget.apiService.downloadBankReport(bank, period: _past),
       onError: (e) {
+        // ผลตรวจยอดเงินกู้เปลี่ยนระหว่างที่เปิดหน้าอยู่: backend กันไว้ ล็อกหน้าด้วยแถบเตือนตัวเดียวกัน
+        if (e.code == ErrorCodes.loanCheckRequired) {
+          _gate = LoanGate.fromError(e, BankReportScreen.gateAction);
+          return true;
+        }
         if (e.code == ErrorCodes.loanAmountMismatch) {
           final banks = [
             for (final b in e.details?['banks'] as List? ?? const [])
@@ -431,7 +477,7 @@ class _BankReportScreenState extends State<BankReportScreen>
           title: BankReportScreen.menuTitle,
           subtitle: 'ไฟล์ Excel ส่งธนาคารของงวด หนึ่งแถวต่อหนึ่งเลขที่บัญชี',
           bullets: [
-            'ธอส. ออมสิน และกรุงไทย ต้องผ่านการตรวจยอดเงินกู้กับหนี้เดือนก่อนจึงออกได้',
+            'งวดปัจจุบันต้องผ่าน "ตรวจยอดเงินกู้กับหนี้เดือน" ก่อน (ยอดตรงทุกธนาคารและไม่มีคนที่ไม่มีเลขบัญชี) จึงออกรายงานได้',
             'คนที่มีหนี้แต่ไม่มีเลขที่บัญชีจะไม่อยู่ในไฟล์',
           ],
         ),
@@ -447,11 +493,22 @@ class _BankReportScreenState extends State<BankReportScreen>
               _notes.clear();
               downloadError = null;
             });
+            _checkGate();
           },
         ),
         const SizedBox(height: 12),
         if (downloadError != null) ...[
           NoticeBar(type: NoticeType.error, text: downloadError!),
+          const SizedBox(height: 12),
+        ],
+        if (_gate != null) ...[
+          LoanGateNotice(
+            apiService: widget.apiService,
+            text: _gate!,
+            onReturn: () {
+              if (mounted) _checkGate();
+            },
+          ),
           const SizedBox(height: 12),
         ],
         if (_mismatch != null) ...[
@@ -507,7 +564,8 @@ class _BankReportScreenState extends State<BankReportScreen>
                       label: 'ออกรายงาน (xlsx)',
                       icon: Icons.table_view_outlined,
                       busy: downloading == b.key,
-                      blocked: downloading != null,
+                      blocked:
+                          downloading != null || _checking || _gate != null,
                       saved: savedOf(b.key),
                       onDownload: () => _run(b.key),
                     ),

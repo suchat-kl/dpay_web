@@ -223,6 +223,8 @@ class FakePhase3 {
   static const String reportMissingMessage = 'ไม่มีข้อมูลของรายงานนี้';
   static const String mismatchMessage =
       'ยอดเลขบัญชีเงินกู้ยังไม่ตรงกับหนี้รายเดือน';
+  static const String loanCheckRequiredMessage =
+      'กรุณาแก้ที่ "ตรวจยอดเงินกู้กับหนี้เดือน" ก่อน';
   static const String chapanaExistsMessage = 'งวดนี้มีข้อมูลฌาปนกิจแล้ว';
   static const String sahaExistsMessage =
       'งวดนี้มีข้อมูลสหกรณ์ของประเภทนี้แล้ว';
@@ -268,6 +270,24 @@ extension _FakePhase3Routes on FakeBackend {
     final year = '${q['year'] ?? body?['year'] ?? periodYear}';
     final current = month == periodMonth && year == periodYear;
     final period = {'month': month, 'year': year};
+
+    /// ด่าน "ตรวจยอดเงินกู้กับหนี้เดือน" ของ backend: งวดปัจจุบันที่ยอดไม่ตรงหรือมีคนไม่มีเลขบัญชี = 409
+    ResponseBody? loanGate() {
+      if (!current) return null;
+      final wrong = p3.loanMismatches.length;
+      final missing = p3.missingAccounts.length;
+      if (wrong == 0 && missing == 0) return null;
+      return conflict(
+        'LOAN_CHECK_REQUIRED',
+        FakePhase3.loanCheckRequiredMessage,
+        {
+          ...period,
+          'ok': false,
+          'mismatch_count': wrong,
+          'missing_account': missing,
+        },
+      );
+    }
 
     // ── ลบข้อมูลหลักหลายรายการ ──
     final many = RegExp(r'^/api/master/([a-z-]+)/delete$').firstMatch(path);
@@ -593,6 +613,8 @@ extension _FakePhase3Routes on FakeBackend {
         if (!const ['AIA', 'GHB', 'GSB', 'KTB'].contains(name)) {
           return _bad('ไม่รู้จักธนาคาร $name');
         }
+        final gate = loanGate();
+        if (gate != null) return gate;
         final wrong = p3.loanMismatches.where((m) => m['bank'] == name).length;
         if (wrong > 0) {
           return conflict('LOAN_AMOUNT_MISMATCH', FakePhase3.mismatchMessage, {
@@ -917,6 +939,8 @@ extension _FakePhase3Routes on FakeBackend {
       });
     }
     if (path == '/api/cgd-files/zip' && method == 'GET') {
+      final gate = loanGate();
+      if (gate != null) return gate;
       final t = q['type'];
       return _file(
         const [80, 75, 5, 6],
@@ -931,6 +955,8 @@ extension _FakePhase3Routes on FakeBackend {
       if (!FakePhase3.cgdCodes.contains(cgd.group(2))) {
         return _error(404, 'NOT_FOUND', 'ไม่พบไฟล์ที่ระบุ');
       }
+      final gate = loanGate();
+      if (gate != null) return gate;
       return _file(
         // ไบต์ TIS-620 ของ "กข" ตามด้วย CRLF — หน้าเว็บต้องส่งต่อเท่าเดิมทุกไบต์
         const [0xA1, 0xA2, 13, 10],

@@ -26,6 +26,7 @@ import 'package:dpay/utils/file_pick.dart';
 import 'package:dpay/utils/permission.dart';
 import 'package:dpay/widgets/debt_dialogs.dart';
 import 'package:dpay/widgets/loan_editor.dart';
+import 'package:dpay/widgets/loan_gate.dart';
 import 'package:dpay/widgets/period_progress.dart';
 import 'package:dpay/widgets/person_finder.dart';
 import 'package:dpay/widgets/screen_parts.dart';
@@ -132,6 +133,27 @@ void main() {
     await tapKey(tester, ValueKey('month-$month'));
   }
 
+  /// ข้อมูลตั้งต้นของตัวจำลองมีทั้งยอดไม่ตรงและคนที่ไม่มีเลขบัญชี (ข้อ 8 ไม่ผ่าน) — เก็บไว้แล้วล้างให้ผ่าน
+  late List<Map<String, dynamic>> loanMismatches;
+  late List<Map<String, dynamic>> missingAccounts;
+  void passLoanCheck() {
+    loanMismatches = backend.p3.loanMismatches;
+    missingAccounts = backend.p3.missingAccounts;
+    backend.p3
+      ..loanMismatches = []
+      ..missingAccounts = [];
+  }
+
+  /// ปุ่มดาวน์โหลดของ [DownloadButtons] กดได้หรือไม่
+  bool canDownload(WidgetTester tester, Key key) => tester
+      .widget<ElevatedButton>(
+        find.descendant(
+          of: find.byKey(key),
+          matching: find.byType(ElevatedButton),
+        ),
+      )
+      .enabled;
+
   group('ตัวช่วยดาวน์โหลดไฟล์ (เส้น API)', () {
     test('ชื่อไฟล์จาก Content-Disposition', () {
       expect(
@@ -157,6 +179,7 @@ void main() {
       'ไฟล์ข้อความ TIS-620 ได้ไบต์เท่าเดิมทุกไบต์ พร้อมชื่อและชนิด',
       () async {
         await signIn(FakeBackend.account);
+        passLoanCheck();
         final f = await api.downloadCgdFile('G', '40302', name: 'x.txt');
         expect(f.bytes, Uint8List.fromList([0xA1, 0xA2, 13, 10]));
         expect(f.fileName, 'G-40302-2568-07.txt');
@@ -263,11 +286,14 @@ void main() {
   });
 
   group('ไฟล์ส่งกรมบัญชีกลาง', () {
+    setUp(passLoanCheck);
+
     testWidgets(
       'ตาราง 14 ไฟล์ จำนวนคน/ยอด เตือนอักขระที่ TIS-620 ไม่มี ดาวน์โหลดรายไฟล์และ zip',
       (tester) async {
         await pump(tester, CgdFilesScreen(apiService: api));
-        expect(backend.calls, ['GET /api/cgd-files']);
+        expect(backend.calls, ['GET /api/cgd-files', 'GET /api/loans/check']);
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
         expect(backend.queryOf('GET /api/cgd-files'), isEmpty);
         for (final t in ['G', 'E']) {
           for (final c in FakePhase3.cgdCodes) {
@@ -325,6 +351,110 @@ void main() {
         });
       },
     );
+
+    testWidgets(
+      'ข้อ 8 ยังไม่ผ่าน: เตือนให้แก้ข้อ 8 ก่อน ดาวน์โหลดไม่ได้ ไปแก้แล้วกลับมาใช้ได้ งวดย้อนหลังไม่ล็อก',
+      (tester) async {
+        backend.p3
+          ..loanMismatches = loanMismatches
+          ..missingAccounts = missingAccounts;
+        await pump(tester, CgdFilesScreen(apiService: api));
+        final notice = find.byKey(LoanGate.noticeKey);
+        expect(notice, findsOneWidget);
+        expect(
+          find.descendant(
+            of: notice,
+            matching: find.textContaining(
+              'ยอดเงินกู้ไม่ตรงกับหนี้เดือน 3 รายการ · ไม่มีเลขบัญชีเงินกู้ 1 คน',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: notice,
+            matching: find.textContaining(CgdFilesScreen.gateAction),
+          ),
+          findsOneWidget,
+        );
+        // ตารางยังดูได้ แต่ปุ่มดาวน์โหลดทุกปุ่มกดไม่ได้
+        expect(find.byKey(CgdFilesScreen.rowKey('G', '40302')), findsOneWidget);
+        expect(canDownload(tester, CgdFilesScreen.zipAllKey), isFalse);
+        await tapKey(tester, CgdFilesScreen.fileKey('G', '40302'));
+        await tapKey(tester, CgdFilesScreen.zipKey('E'));
+        expect(saver.files, isEmpty);
+        expect(
+          backend.calls.where((c) => c.startsWith('GET /api/cgd-files/')),
+          isEmpty,
+        );
+
+        // ไปข้อ 8 แก้ให้ครบ แล้วกลับมา: ตรวจใหม่และใช้ได้
+        await tapKey(tester, LoanGate.goKey);
+        expect(find.byType(LoanCheckScreen), findsOneWidget);
+        backend.p3
+          ..loanMismatches = []
+          ..missingAccounts = [];
+        backend.clearLog();
+        await tester.tap(find.byTooltip('ปิด').last);
+        await tester.pumpAndSettle();
+        expect(backend.calls, contains('GET /api/loans/check'));
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        expect(canDownload(tester, CgdFilesScreen.zipAllKey), isTrue);
+        await tapKey(tester, CgdFilesScreen.fileKey('G', '40302'));
+        expect(saver.files.single.fileName, 'G-40302-2568-07.txt');
+
+        // งวดย้อนหลัง: เลขบัญชีไม่แยกงวด จึงไม่ตรวจและไม่ล็อก
+        backend.p3.loanMismatches = loanMismatches;
+        backend.clearLog();
+        await pickPast(tester, 6);
+        expect(backend.calls, isNot(contains('GET /api/loans/check')));
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        expect(canDownload(tester, CgdFilesScreen.zipAllKey), isTrue);
+      },
+    );
+
+    testWidgets(
+      'ผ่านตอนเปิดหน้า แต่ผลตรวจเปลี่ยนก่อนกดดาวน์โหลด: backend ตอบ 409 หน้าเปลี่ยนเป็นแถบเตือนและล็อก',
+      (tester) async {
+        await pump(tester, CgdFilesScreen(apiService: api));
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        backend.p3.missingAccounts = missingAccounts;
+        await tapKey(tester, CgdFilesScreen.fileKey('G', '40302'));
+        expect(backend.calls.last, 'GET /api/cgd-files/G/40302');
+        expect(saver.files, isEmpty);
+        expect(
+          find.descendant(
+            of: find.byKey(LoanGate.noticeKey),
+            matching: find.textContaining('ไม่มีเลขบัญชีเงินกู้ 1 คน'),
+          ),
+          findsOneWidget,
+        );
+        expect(canDownload(tester, CgdFilesScreen.zipAllKey), isFalse);
+
+        // zip ก็ถูกกันที่ backend เหมือนกัน (เปิดหน้าใหม่ตอนผ่าน แล้วยอดกลับไม่ตรง)
+        backend.p3.missingAccounts = [];
+        await tester.pumpWidget(const SizedBox());
+        await pump(tester, CgdFilesScreen(apiService: api));
+        backend.p3.loanMismatches = loanMismatches;
+        await download(tester, CgdFilesScreen.zipAllKey);
+        expect(backend.calls.last, 'GET /api/cgd-files/zip');
+        expect(saver.files, isEmpty);
+        expect(find.byKey(LoanGate.noticeKey), findsOneWidget);
+      },
+    );
+
+    testWidgets('ตรวจข้อ 8 ไม่สำเร็จ: ล็อกไว้ก่อนและบอกเหตุ', (tester) async {
+      backend.failPaths.add('/api/loans/check');
+      await pump(tester, CgdFilesScreen(apiService: api));
+      expect(
+        find.descendant(
+          of: find.byKey(LoanGate.noticeKey),
+          matching: find.textContaining('ตรวจยอดเงินกู้กับหนี้เดือนไม่สำเร็จ'),
+        ),
+        findsOneWidget,
+      );
+      expect(canDownload(tester, CgdFilesScreen.zipAllKey), isFalse);
+    });
   });
 
   group('ตรวจยอดเงินกู้กับหนี้เดือน', () {
@@ -547,11 +677,15 @@ void main() {
   });
 
   group('รายงานส่งธนาคาร', () {
+    setUp(passLoanCheck);
+
     testWidgets(
       'AIA ออกได้เลย ธอส. ยอดยังไม่ตรง: แสดง details และพาไปหน้าตรวจยอดเงินกู้ แก้แล้วออกได้',
       (tester) async {
         await pump(tester, BankReportScreen(apiService: api));
-        expect(backend.calls, isEmpty);
+        expect(backend.calls, ['GET /api/loans/check']);
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        backend.clearLog();
 
         await download(tester, BankReportScreen.runKey('AIA'));
         expect(backend.calls, ['GET /api/reports/bank/AIA']);
@@ -561,6 +695,36 @@ void main() {
         expect(backend.connectTimeouts.single, const Duration(minutes: 15));
         expect(find.byKey(BankReportScreen.mismatchKey), findsNothing);
 
+        // ผ่านตอนเปิดหน้า แต่ยอดกลับไม่ตรงก่อนกดออกรายงาน: backend กันไว้ (409 LOAN_CHECK_REQUIRED)
+        // หน้าเปลี่ยนเป็นแถบเตือนตัวเดียวกับตอนเปิดหน้า และล็อกทุกธนาคาร
+        backend.p3.loanMismatches = loanMismatches;
+        await download(tester, BankReportScreen.runKey('GHB'));
+        expect(backend.calls.last, 'GET /api/reports/bank/GHB');
+        final gate = find.byKey(LoanGate.noticeKey);
+        expect(gate, findsOneWidget);
+        expect(
+          find.descendant(
+            of: gate,
+            matching: find.textContaining(
+              'ยอดเงินกู้ไม่ตรงกับหนี้เดือน 3 รายการ',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(BankReportScreen.mismatchKey), findsNothing);
+        expect(find.text(FakePhase3.loanCheckRequiredMessage), findsNothing);
+        for (final b in BankReportScreen.banks.keys) {
+          expect(
+            canDownload(tester, BankReportScreen.runKey(b)),
+            isFalse,
+            reason: b,
+          );
+        }
+        expect(saver.files, hasLength(1));
+
+        // งวดย้อนหลังไม่ล็อก แต่ backend ยังตรวจยอดของธนาคารนั้นแบบเดิม (409 LOAN_AMOUNT_MISMATCH)
+        await pickPast(tester, 6);
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
         await download(tester, BankReportScreen.runKey('GHB'));
         final notice = find.byKey(BankReportScreen.mismatchKey);
         expect(notice, findsOneWidget);
@@ -591,13 +755,58 @@ void main() {
         backend.p3.loanMismatches = [];
         await download(tester, BankReportScreen.runKey('GHB'));
         expect(find.byKey(BankReportScreen.mismatchKey), findsNothing);
-        expect(saver.files.last.fileName, 'rep-072568-GHB.xlsx');
+        expect(saver.files.last.fileName, 'rep-062568-GHB.xlsx');
 
         // ไม่มีข้อมูล
         backend.p3.reportMissing.add('bank-KTB');
         await download(tester, BankReportScreen.runKey('KTB'));
         expect(find.text(ReportScreen.noDataText), findsOneWidget);
         expect(saver.files, hasLength(2));
+      },
+    );
+
+    testWidgets(
+      'ข้อ 8 ยังไม่ผ่าน: ออกรายงานไม่ได้ทุกธนาคาร (รวม AIA) แก้แล้วกลับมาออกได้ งวดย้อนหลังไม่ล็อก',
+      (tester) async {
+        // ยอดตรงแล้ว เหลือแต่คนที่ไม่มีเลขบัญชี ก็ยังไม่ผ่าน
+        backend.p3.missingAccounts = missingAccounts;
+        await pump(tester, BankReportScreen(apiService: api));
+        final notice = find.byKey(LoanGate.noticeKey);
+        expect(
+          find.descendant(
+            of: notice,
+            matching: find.textContaining('ไม่มีเลขบัญชีเงินกู้ 1 คน'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: notice, matching: find.textContaining('ไม่ตรง')),
+          findsNothing,
+        );
+        for (final b in BankReportScreen.banks.keys) {
+          expect(
+            canDownload(tester, BankReportScreen.runKey(b)),
+            isFalse,
+            reason: b,
+          );
+        }
+
+        await tapKey(tester, LoanGate.goKey);
+        expect(find.byType(LoanCheckScreen), findsOneWidget);
+        backend.p3.missingAccounts = [];
+        await tester.tap(find.byTooltip('ปิด').last);
+        await tester.pumpAndSettle();
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        await download(tester, BankReportScreen.runKey('AIA'));
+        expect(saver.files.single.fileName, 'rep-072568-AIA.xlsx');
+
+        // งวดย้อนหลังไม่ล็อก
+        backend.p3.missingAccounts = missingAccounts;
+        backend.clearLog();
+        await pickPast(tester, 6);
+        expect(backend.calls, isNot(contains('GET /api/loans/check')));
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
+        expect(canDownload(tester, BankReportScreen.runKey('KTB')), isTrue);
       },
     );
   });
@@ -1419,10 +1628,15 @@ void main() {
         expect(status(tester, 7), PeriodProgress.todoLabel);
         expect(status(tester, 8), PeriodProgress.problemLabel);
         expect(find.textContaining('ไม่ตรง 3 รายการ'), findsOneWidget);
-        // ไฟล์ส่งกรมบัญชีกลาง รายงานส่งธนาคาร รายงานฌาปนกิจ-สลิป รายงาน: ทางลัดเฉย ๆ
+        // ข้อ 8 ยังไม่ผ่าน: ไฟล์ส่งกรมบัญชีกลาง รายงานส่งธนาคาร ล็อก
+        for (final n in [9, 10]) {
+          expect(status(tester, n), LoanGate.lockedLabel, reason: 'ขั้นที่ $n');
+        }
+        expect(find.text(PeriodProgress.lockedDetail), findsNWidgets(2));
+        // รายงานฌาปนกิจ-สลิป รายงาน: ทางลัดเฉย ๆ
         // (ฌาปนกิจ-สลิปเรียกข้ามระบบ จึงไม่เรียกอัตโนมัติจากหน้าแรก)
         expect(backend.calls, isNot(contains('GET /api/chapana/slip-check')));
-        for (final n in [9, 10, 11, 12]) {
+        for (final n in [11, 12]) {
           expect(status(tester, n), isNull, reason: 'ขั้นที่ $n');
         }
 
@@ -1438,7 +1652,8 @@ void main() {
         expect(status(tester, 6), PeriodProgress.doneLabel);
         expect(find.textContaining('32 คน · ผู้เกษียณ 3 คน'), findsOneWidget);
 
-        // สหกรณ์ครบสองประเภทแต่ยังมีเลขบัตรปลอม = ต้องแก้ / เงินกู้ตรง = ทำแล้ว
+        // สหกรณ์ครบสองประเภทแต่ยังมีเลขบัตรปลอม = ต้องแก้
+        // เงินกู้ตรงแล้วแต่ยังมีคนที่ไม่มีเลขบัญชี = ข้อ 8 ยังต้องแก้ ข้อ 9/10 ยังล็อก
         backend.p3
           ..sahaRows['G'] = 10
           ..sahaRows['E'] = 4
@@ -1446,13 +1661,62 @@ void main() {
         await tapKey(tester, PeriodProgress.refreshKey);
         expect(status(tester, 7), PeriodProgress.problemLabel);
         expect(find.textContaining('เลขบัตรปลอม 12'), findsOneWidget);
+        expect(status(tester, 8), PeriodProgress.problemLabel);
+        expect(find.text('ตรงทุกธนาคาร · ไม่มีเลขบัญชี 1 คน'), findsOneWidget);
+        expect(status(tester, 9), LoanGate.lockedLabel);
+        // ครบแล้ว = ทำแล้ว ข้อ 9/10 ปลดล็อก
+        backend.p3.missingAccounts = [];
+        await tapKey(tester, PeriodProgress.refreshKey);
         expect(status(tester, 8), PeriodProgress.doneLabel);
+        for (final n in [9, 10]) {
+          expect(status(tester, n), isNull, reason: 'ขั้นที่ $n');
+        }
         backend.p3.sahaUnresolved.clear();
         await tapKey(tester, PeriodProgress.refreshKey);
         expect(status(tester, 7), PeriodProgress.doneLabel);
 
         await tapKey(tester, PeriodProgress.stepKey(9));
         expect(find.byType(CgdFilesScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'ข้อ 9/10 ล็อก: กดแล้วเตือนให้แก้ข้อ 8 ก่อน ไม่เปิดหน้า เลือกไปข้อ 8 ได้',
+      (tester) async {
+        await pump(tester, host());
+        await tapKey(tester, PeriodProgress.stepKey(9));
+        expect(find.byType(CgdFilesScreen), findsNothing);
+        expect(find.textContaining(LoanGate.title), findsOneWidget);
+        expect(
+          find.textContaining(
+            'ยอดเงินกู้ไม่ตรงกับหนี้เดือน 3 รายการ · ไม่มีเลขบัญชีเงินกู้ 1 คน',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining(CgdFilesScreen.gateAction), findsOneWidget);
+        await tester.tap(find.text('ปิด'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining(LoanGate.title), findsNothing);
+        expect(find.byType(CgdFilesScreen), findsNothing);
+
+        await tapKey(tester, PeriodProgress.stepKey(10));
+        expect(find.byType(BankReportScreen), findsNothing);
+        expect(
+          find.textContaining(BankReportScreen.gateAction),
+          findsOneWidget,
+        );
+        await tester.tap(find.text(PeriodProgress.goCheckLabel));
+        await tester.pumpAndSettle();
+        expect(find.byType(LoanCheckScreen), findsOneWidget);
+        // แก้เสร็จกลับมา: โหลดสถานะใหม่ ข้อ 10 ปลดล็อก
+        backend.p3
+          ..loanMismatches = []
+          ..missingAccounts = [];
+        await tester.tap(find.byTooltip('ปิด').last);
+        await tester.pumpAndSettle();
+        expect(status(tester, 10), isNull);
+        await tapKey(tester, PeriodProgress.stepKey(10));
+        expect(find.byType(BankReportScreen), findsOneWidget);
       },
     );
 

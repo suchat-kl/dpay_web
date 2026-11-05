@@ -54,6 +54,7 @@ widgets/     header, sidebar_menu, footer, test_phase_banner, hover_lift, app_pa
              work_parts (WorkPage, FactRow, PeriodPicker, FileDownloads, DownloadButtons — ชิ้นส่วนของงานประจำงวด), period_progress (ความคืบหน้าของงวด),
              debt_dialogs (DebtAuditDialog), person_finder,
              loan_editor (LoanEditor ตารางเลขบัญชีเงินกู้ของหนึ่งคน ใช้ร่วมกันระหว่าง loan_screen กับ LoanEditorDialog),
+             loan_gate (LoanGate ด่านของ "ตรวจยอดเงินกู้กับหนี้เดือน" (ข้อ 8): ยอดเงินกู้ไม่ตรงหรือมีคนไม่มีเลขบัญชี = ข้อ 9 ไฟล์ส่งกรมบัญชีกลาง/ข้อ 10 รายงานส่งธนาคาร ใช้ไม่ได้ ทั้งหน้าแรกและในหน้าจอ เฉพาะงวดปัจจุบัน; backend กันซ้ำด้วย 409 `LOAN_CHECK_REQUIRED` → แถบเตือนตัวเดียวกัน),
              thai_date_picker (วันเดียว), thai_date_range_picker (ช่วงวันที่ แตะ/ลาก), div_selector (DivSelector, DivDropdown),
              alert_message_box, login_dialog, change_password_dialog, reset_password_dialog, user_dialog
 utils/       money.dart (Money = สตางค์, IdCard, BeDate = ddMMyyyy พ.ศ.), logger.dart (AppLogger), util.dart (วันที่ไทย), dialog.dart (AppDialog), snackbar_helper.dart,
@@ -158,7 +159,7 @@ backend ตรวจสิทธิ์กับหน่วยงานซ้ำ
 | `div_status_test` | สถานะการบันทึกของหน่วยงาน: สรุป/แถบความคืบหน้า ตัวกรอง เรียง แบ่งหน้า กดแถว คัดลอกรายชื่อ `audit_available` เท็จ `period_ready` เท็จ div_order null / div ว่าง งวดไม่มีรายการ 404 และขั้น "หน่วยงานบันทึกหนี้" ของความคืบหน้าของงวด |
 | `alert_message_placement_test` | ข้อความแจ้งผู้ใช้งานมีที่หน้าแรกกล่องเดียว หน้าอื่น 18 หน้า หน้าต่างเข้าสู่ระบบ และเมนู ไม่มี |
 | `chapana_slip_test` | รายงานฌาปนกิจ-สลิป: ไม่เรียกเองตอนเปิด สรุป ตารางผู้ที่หักไม่ได้ (แบ่งหน้า เลขบัตรปิดบางส่วน จ่ายให้กับหลายบรรทัด) PDF หักได้ครบ ยังไม่ได้นำเข้า ข้อผิดพลาด 503/502 สิทธิ์ |
-| `phase3_test` | ตัวช่วยดาวน์โหลด (ชื่อไฟล์ ไบต์เท่าเดิม 404 เป็น JSON สิทธิ์) ไฟล์ส่งกรมบัญชีกลาง ตรวจยอดเงินกู้ รายงานส่งธนาคาร (`LOAN_AMOUNT_MISMATCH`) รายงาน PDF นำเข้าฌาปนกิจ/สหกรณ์ (dry run ปัญหา 4 ชนิด ยืนยันแทนที่ แก้การจับคู่) ความคืบหน้าของงวด ค้นบุคคล `truncated` ประวัติรายการเก่า |
+| `phase3_test` | ตัวช่วยดาวน์โหลด (ชื่อไฟล์ ไบต์เท่าเดิม 404 เป็น JSON สิทธิ์) ไฟล์ส่งกรมบัญชีกลาง ตรวจยอดเงินกู้ รายงานส่งธนาคาร (`LOAN_CHECK_REQUIRED`/`LOAN_AMOUNT_MISMATCH`) ด่านตรวจยอดเงินกู้ รายงาน PDF นำเข้าฌาปนกิจ/สหกรณ์ (dry run ปัญหา 4 ชนิด ยืนยันแทนที่ แก้การจับคู่) ความคืบหน้าของงวด ค้นบุคคล `truncated` ประวัติรายการเก่า |
 | `home_screen_test` | หน้าแรกก่อน/หลังเข้าสู่ระบบ ข้อความแจ้ง (ยาว ว่าง ผิดพลาด) การ์ดหน่วยงาน งวด ระยะเวลาแก้ไข |
 | `settings_screens_test` | กำหนดเดือนปี ข้อความแจ้ง (ตัวอย่างการแสดงผล) ระยะเวลาแก้ไข โมเดล Period / EditWindow สิทธิ์ ACCOUNT |
 | `thai_date_range_picker_test` | ตัวเลือกช่วงวันที่: แตะสองครั้ง ลาก (นิ้ว/เมาส์) ข้ามเดือน/ปี ขอบ first/last สองเดือน/เดือนเดียว วันนี้ ยกเลิก คีย์บอร์ด |

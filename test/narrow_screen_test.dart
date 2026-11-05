@@ -19,7 +19,9 @@ import 'package:dpay/screens/loan_check_screen.dart';
 import 'package:dpay/screens/report_screen.dart';
 import 'package:dpay/screens/saha_import_screen.dart';
 import 'package:dpay/utils/file_pick.dart';
+import 'package:dpay/widgets/loan_gate.dart';
 import 'package:dpay/widgets/period_progress.dart';
+import 'package:dpay/widgets/work_parts.dart';
 import 'package:dpay/screens/deduct_screen.dart';
 import 'package:dpay/screens/loan_screen.dart';
 import 'package:dpay/screens/master_screen.dart';
@@ -733,8 +735,22 @@ void main() {
         await scrollThrough(tester, find.byType(ListView).first);
         expectNoOverflow(tester);
 
-        // รายงานส่งธนาคาร: แถบยอดไม่ตรงพร้อมปุ่มไปหน้าตรวจ อยู่ในจอ
+        // รายงานส่งธนาคาร: ข้อ 8 ยังไม่ผ่าน แถบเตือนพร้อมปุ่มไปข้อ 8 อยู่ในจอ
         await open(tester, screens[4]);
+        await reveal(tester, find.byKey(LoanGate.goKey));
+        expectNoOverflow(tester);
+        expectWithinScreen(tester, find.byKey(LoanGate.noticeKey));
+        expectWithinScreen(tester, find.byKey(LoanGate.goKey));
+
+        // งวดย้อนหลัง (ไม่ล็อก) ยอดไม่ตรงตอนกดออกรายงาน (409 LOAN_AMOUNT_MISMATCH): แถบยอดไม่ตรงพร้อมปุ่มไปหน้าตรวจ อยู่ในจอ
+        await reveal(tester, find.byKey(PeriodPicker.buttonKey));
+        await tester.tap(find.byKey(PeriodPicker.buttonKey));
+        await tester.pumpAndSettle();
+        final june = find.byKey(const ValueKey('month-6'));
+        await reveal(tester, june);
+        await tester.tap(june);
+        await tester.pumpAndSettle();
+        expect(find.byKey(LoanGate.noticeKey), findsNothing);
         final ghb = find.descendant(
           of: find.byKey(BankReportScreen.runKey('GHB')),
           matching: find.byType(ElevatedButton),

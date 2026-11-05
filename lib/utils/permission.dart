@@ -133,6 +133,9 @@ class ErrorCodes {
   static const String jobRunning = 'JOB_RUNNING';
   static const String loanAmountMismatch = 'LOAN_AMOUNT_MISMATCH';
 
+  /// งวดปัจจุบันยังไม่ผ่าน "ตรวจยอดเงินกู้กับหนี้เดือน" (409) — details มี mismatch_count / missing_account
+  static const String loanCheckRequired = 'LOAN_CHECK_REQUIRED';
+
   /// ไฟล์สหกรณ์น่าจะเป็นของอีกประเภทบุคลากร (400) — details บอกจำนวนที่นับได้ต่อประเภท
   static const String sahaTypeMismatch = 'SAHA_TYPE_MISMATCH';
   static const String slipApiNotConfigured = 'SLIP_API_NOT_CONFIGURED';

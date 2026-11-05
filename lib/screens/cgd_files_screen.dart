@@ -5,6 +5,9 @@ import '../models/debt.dart';
 import '../models/period.dart';
 import '../services/api_service.dart';
 import '../services/work_api.dart';
+import '../utils/file_download.dart';
+import '../utils/permission.dart';
+import '../widgets/loan_gate.dart';
 import '../widgets/screen_parts.dart';
 import '../widgets/sheet_table.dart';
 import '../widgets/work_parts.dart';
@@ -14,6 +17,8 @@ import '../widgets/work_parts.dart';
 /// `GET /api/cgd-files` แสดงจำนวนคน/ยอดต่อไฟล์ ดาวน์โหลดรายไฟล์ (`/api/cgd-files/{type}/{code}`)
 /// หรือ zip ทั้งชุด/ต่อประเภท (`/api/cgd-files/zip`) ไฟล์สร้างตอนเรียก ไม่มีขั้น "สร้างไฟล์" แยกเหมือนระบบเดิม
 /// **รับเป็นไบต์แล้วส่งต่อให้เบราว์เซอร์เท่าเดิมทุกไบต์** (TIS-620) ไม่แปลงเป็นข้อความ
+///
+/// งวดปัจจุบันต้องผ่านข้อ 8 ก่อน ([LoanGate]) ไม่ผ่าน = ดูตารางได้แต่ดาวน์โหลดไม่ได้
 class CgdFilesScreen extends StatefulWidget {
   final ApiService apiService;
 
@@ -40,6 +45,8 @@ class CgdFilesScreen extends StatefulWidget {
     'Sum': 'ไฟล์รวมจำนวนหนี้ คน',
   };
 
+  static const String gateAction = 'ดาวน์โหลดไฟล์ส่งกรมบัญชีกลาง';
+
   static const String emptyFileText = 'ไฟล์ว่าง (ไม่มีผู้มียอดของรหัสนี้)';
   static String unmappableText(int n) =>
       'มีอักขระ $n ตัวที่รหัส TIS-620 ไม่มี ในไฟล์จะเป็น "?" — ตรวจชื่อของบุคคลก่อนส่ง';
@@ -55,6 +62,12 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
   bool _loading = true;
   String? _error;
 
+  /// ข้อความของด่านข้อ 8 — null = ผ่าน (หรือเป็นงวดย้อนหลัง)
+  String? _gate;
+
+  /// ดาวน์โหลดไม่ได้: มีไฟล์อื่นกำลังโหลดอยู่ หรือยังไม่ผ่านข้อ 8
+  bool get _blocked => downloading != null || _gate != null;
+
   @override
   void initState() {
     super.initState();
@@ -69,9 +82,11 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
     });
     try {
       final items = await widget.apiService.getCgdFiles(period: _past);
+      final gate = await _checkGate();
       if (!mounted) return;
       setState(() {
         _items = items;
+        _gate = gate;
         _loading = false;
       });
     } catch (e) {
@@ -83,6 +98,31 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
       });
     }
   }
+
+  /// ตรวจข้อ 8 ของงวดปัจจุบัน — ตรวจไม่สำเร็จถือว่ายังไม่ผ่าน
+  Future<String?> _checkGate() async {
+    if (_past != null) return null;
+    try {
+      final check = await widget.apiService.getLoanCheck();
+      return LoanGate.passed(check)
+          ? null
+          : LoanGate.message(check, CgdFilesScreen.gateAction);
+    } catch (e) {
+      return LoanGate.failedText('$e');
+    }
+  }
+
+  /// ดาวน์โหลด [key] — backend ตอบ 409 LOAN_CHECK_REQUIRED (ผลตรวจเปลี่ยนระหว่างเปิดหน้า) = ล็อกหน้าด้วยแถบเตือน
+  Future<void> _download(String key, Future<DownloadedFile> Function() fetch) =>
+      runDownload(
+        key,
+        fetch,
+        onError: (e) {
+          if (e.code != ErrorCodes.loanCheckRequired) return false;
+          _gate = LoanGate.fromError(e, CgdFilesScreen.gateAction);
+          return true;
+        },
+      );
 
   Widget _row(Map<String, dynamic> f) {
     final type = '${f['type']}';
@@ -146,9 +186,9 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
                   key: CgdFilesScreen.fileKey(type, code),
                   icon: savedOf(key) != null ? Icons.check : Icons.download,
                   color: AppTheme.primaryColor,
-                  onPressed: downloading != null
+                  onPressed: _blocked
                       ? null
-                      : () => runDownload(
+                      : () => _download(
                           key,
                           () => widget.apiService.downloadCgdFile(
                             type,
@@ -194,9 +234,9 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
         'zip ${EmpType.nameOf(type)}',
         key: CgdFilesScreen.zipKey(type),
         icon: Icons.folder_zip_outlined,
-        onPressed: downloading != null || rows.isEmpty
+        onPressed: _blocked || rows.isEmpty
             ? null
-            : () => runDownload(
+            : () => _download(
                 'zip-$type',
                 () =>
                     widget.apiService.downloadCgdZip(type: type, period: _past),
@@ -238,7 +278,8 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
           subtitle:
               'ไฟล์ข้อความส่งกรมบัญชีกลางของงวด 14 ไฟล์ สร้างจากยอดล่าสุดทุกครั้งที่ดาวน์โหลด',
           bullets: [
-            'ตรวจยอดเงินกู้และนำเข้าฌาปนกิจ/สหกรณ์ให้เรียบร้อยก่อนส่งไฟล์',
+            'งวดปัจจุบันต้องผ่าน "ตรวจยอดเงินกู้กับหนี้เดือน" ก่อน (ยอดตรงทุกธนาคารและไม่มีคนที่ไม่มีเลขบัญชี) จึงดาวน์โหลดได้',
+            'นำเข้าฌาปนกิจ/สหกรณ์ให้เรียบร้อยก่อนส่งไฟล์',
             'ไฟล์มีข้อมูลบุคคล เก็บและส่งต่อด้วยความระมัดระวัง',
           ],
         ),
@@ -263,14 +304,24 @@ class _CgdFilesScreenState extends State<CgdFilesScreen>
             child: Center(child: CircularProgressIndicator()),
           )
         else if (_error == null) ...[
+          if (_gate != null) ...[
+            LoanGateNotice(
+              apiService: widget.apiService,
+              text: _gate!,
+              onReturn: () {
+                if (mounted) _load();
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
           DownloadButtons(
             key: CgdFilesScreen.zipAllKey,
             label: 'ดาวน์โหลดทั้งชุด (zip 14 ไฟล์)',
             icon: Icons.folder_zip,
             busy: downloading == 'zip',
-            blocked: downloading != null || _items.isEmpty,
+            blocked: _blocked || _items.isEmpty,
             saved: zipDone,
-            onDownload: () => runDownload(
+            onDownload: () => _download(
               'zip',
               () => widget.apiService.downloadCgdZip(period: _past),
             ),
